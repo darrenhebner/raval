@@ -1,0 +1,12 @@
+{
+  "name": "streamweaver",
+  "version": "0.0.1",
+  "private": false,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

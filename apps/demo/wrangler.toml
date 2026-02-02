@@ -1,0 +1,16 @@
+workers_dev = true
+name = "streamweaver-demo"
+compatibility_date = "2025-03-05"
+compatibility_flags = ["nodejs_compat"]
+main = "./server.ts"
+
+[placement]
+mode = "smart"
+
+[observability.logs]
+enabled = true
+
+[vars]
+# Set your environment variables here
+# Example: API_KEY = "your-api-key-here"
+# Note: Secrets should be set using: npx wrangler secret put SECRET_NAME
