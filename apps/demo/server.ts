@@ -14,6 +14,12 @@ interface Params {
 
 const ParamsContext = createContext<Params>();
 
+interface User {
+  name: string;
+}
+
+const UserContext = createContext<User>();
+
 function* Footer() {
   const { year } = yield* ParamsContext;
   return html`<footer>At is since ${year}</footer>`;
@@ -26,7 +32,7 @@ function* User(user: string) {
   </li>`;
 }
 
-function* App() {
+function* Home() {
   const { name } = yield* DataContext;
   const footer = yield* Footer();
 
@@ -41,6 +47,13 @@ function* App() {
   </main>`;
 }
 
+function* ShowUser() {
+  const { name } = yield* UserContext;
+  return html`<main>
+    Name: ${name}. <a href="${routes.home.href()}">Home</a>
+  </main>`;
+}
+
 const routes = route({
   home: "/",
   user: "/user/:user",
@@ -50,7 +63,7 @@ const router = createRouter();
 
 router.map(routes, {
   home() {
-    const route = new Route(App)
+    const route = new Route(Home)
       .setContext(DataContext, {
         name: "Bill",
       })
@@ -62,8 +75,16 @@ router.map(routes, {
       },
     });
   },
-  user() {
-    return new Response("Not yet implemented", { status: 500 });
+  user({ params }) {
+    const route = new Route(ShowUser).setContext(UserContext, {
+      name: params.user,
+    });
+
+    return new Response(route.renderToStream(), {
+      headers: {
+        "Content-Type": "text/html",
+      },
+    });
   },
 });
 
