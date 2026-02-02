@@ -19,9 +19,12 @@ export class Route<Yields = never> {
     this.#app = app;
   }
 
-  setContext<T>(context: Context<T>, value: T) {
+  setContext<C extends Yields>(
+    context: C,
+    value: C extends Context<infer V> ? V : never,
+  ): Route<Exclude<Yields, C>> {
     this.#context.set(context, value);
-    return this as unknown as Route<Exclude<Yields, Context<T>>>;
+    return this as unknown as Route<Exclude<Yields, C>>;
   }
 
   renderToStream(this: Route<never>) {
