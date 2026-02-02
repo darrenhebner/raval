@@ -14,14 +14,18 @@ const ParamsContext = createContext<Params>();
 
 function* app() {
   const { name } = yield* DataContext;
-  const { id } = yield* ParamsContext;
-  return `<h1>hi, ${name}. Id: ${id}</h1>`;
+  return `<h1>hi, ${name}.</h1>`;
 }
 
 export default {
   async fetch() {
     const route = new Route(app)
-      .setContext(DataContext, { name: "bill" })
+      .setContext(DataContext, function* () {
+        const { id } = yield* ParamsContext;
+        return {
+          name: `Bill - ${id}`,
+        };
+      })
       .setContext(ParamsContext, { id: 123 });
 
     return new Response(route.renderToStream(), {
