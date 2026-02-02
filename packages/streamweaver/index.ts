@@ -11,11 +11,45 @@ export function createContext<T>(): Context<T> {
   return context;
 }
 
+type Html = string & { __brand: "html" };
+
+export function html(
+  strings: TemplateStringsArray,
+  ...values: (string | number | Html | (string | number | Html)[])[]
+): Html {
+  let result = "";
+  for (let i = 0; i < strings.length; i++) {
+    result += strings[i];
+    if (i < values.length) {
+      const value = values[i];
+      if (Array.isArray(value)) {
+        result += value.join("");
+      } else {
+        result += value;
+      }
+    }
+  }
+  return result as Html;
+}
+
+export function* map<T, Return, Yields, Next>(
+  items: Iterable<T>,
+  fn: (item: T, index: number) => Generator<Yields, Return, Next>,
+): Generator<Yields, Return[], Next> {
+  const results: Return[] = [];
+  let i = 0;
+  for (const item of items) {
+    results.push(yield* fn(item, i));
+    i++;
+  }
+  return results;
+}
+
 export class Route<Yields = never, Satisfied = never> {
   #context = new Map<unknown, unknown>();
-  #app: () => Generator<Yields, string, unknown>;
+  #app: () => Generator<Yields, Html, unknown>;
 
-  constructor(app: () => Generator<Yields, string, unknown>) {
+  constructor(app: () => Generator<Yields, Html, unknown>) {
     this.#app = app;
   }
 

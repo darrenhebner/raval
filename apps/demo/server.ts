@@ -1,4 +1,4 @@
-import { createContext, Route } from "streamweaver";
+import { createContext, html, map, Route } from "streamweaver";
 
 interface Data {
   name: string;
@@ -8,25 +8,43 @@ const DataContext = createContext<Data>();
 
 interface Params {
   id: number;
+  year: number;
 }
 
 const ParamsContext = createContext<Params>();
 
-function* app() {
+function* Footer() {
+  const { year } = yield* ParamsContext;
+  return html`<footer>At is since ${year}</footer>`;
+}
+
+function* User(user: string) {
+  const { id } = yield* ParamsContext;
+  return html`<li data-id="${id}">${user}</li>`;
+}
+
+function* App() {
   const { name } = yield* DataContext;
-  return `<h1>hi, ${name}.</h1>`;
+  const footer = yield* Footer();
+
+  const users = ["Bob", "Jim", "Jude"];
+
+  return html`<main>
+    <h1>hi, ${name}.</h1>
+    <ul>
+      ${users.length > 0 ? yield* map(users, User) : ""}
+    </ul>
+    ${footer}
+  </main>`;
 }
 
 export default {
   async fetch() {
-    const route = new Route(app)
-      .setContext(DataContext, function* () {
-        const { id } = yield* ParamsContext;
-        return {
-          name: `Bill - ${id}`,
-        };
+    const route = new Route(App)
+      .setContext(DataContext, {
+        name: "Bill",
       })
-      .setContext(ParamsContext, { id: 123 });
+      .setContext(ParamsContext, { id: 123, year: 1992 });
 
     return new Response(route.renderToStream(), {
       headers: {
