@@ -9,6 +9,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@remix-run/fetch-router": "^0.16.0",
     "streamweaver": "workspace:*"
   },
   "devDependencies": {
