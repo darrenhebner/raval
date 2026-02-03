@@ -10,6 +10,8 @@ import type { Publication } from "../shared/types";
 interface Env {
   DB: D1Database;
   AI: Ai;
+  CLOUDFLARE_ACCOUNT_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
 }
 
 const publications: Publication[] = [
@@ -33,6 +35,12 @@ const mbApi = new MusicBrainzApi({
 
 export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<any>, step: WorkflowStep) {
+    console.log("Workflow Environment Check:", {
+      hasAccountID: !!this.env.CLOUDFLARE_ACCOUNT_ID,
+      hasToken: !!this.env.CLOUDFLARE_API_TOKEN,
+      accountIDLength: this.env.CLOUDFLARE_ACCOUNT_ID?.length,
+    });
+
     const parser = new XMLParser();
 
     for (const pub of publications) {
@@ -89,40 +97,63 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             return { skipped: true, reason: "exists" };
           }
 
-          // 5. Extract information using Cloudflare AI
-          const aiResponse = await this.env.AI.run(
-            "@cf/meta/llama-3-8b-instruct",
-            {
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a music data extractor. Extract the Artist Name and Release Title from the provided review title/description. Return JSON only with keys: artist_name, release_title. If unsure, return null.",
-                },
-                {
-                  role: "user",
-                  content: `Title: ${item.title}\nDescription: ${item.description?.slice(0, 200)}`,
-                },
-              ],
-            },
-          );
-
-          // Parse AI response (it might be a string containing JSON or an object depending on the model/wrapper)
-          // The Workers AI binding usually returns the response directly.
-          // Llama models usually return { response: "string" }
-
+          // 5. Extract information using Cloudflare Browser Rendering /json endpoint
           let artistName, releaseTitle;
+
           try {
-            // Simple heuristic parsing if JSON extraction fails or if model chats too much
-            const jsonMatch = aiResponse.response?.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              artistName = parsed.artist_name;
-              releaseTitle = parsed.release_title;
+            const browserResponse = await fetch(
+              `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/json`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  url: itemUrl,
+                  prompt:
+                    "Extract the Artist Name and Release Title from this review page.",
+                  response_format: {
+                    type: "json_schema",
+                    schema: {
+                      type: "object",
+                      properties: {
+                        artist_name: {
+                          type: "string",
+                        },
+                        release_title: {
+                          type: "string",
+                        },
+                      },
+                      required: ["artist_name", "release_title"],
+                    },
+                  },
+                }),
+              },
+            );
+
+            if (!browserResponse.ok) {
+              const errorText = await browserResponse.text();
+              console.error("Browser Rendering API error:", errorText);
+              return {
+                skipped: true,
+                reason: "browser-rendering-error",
+                details: errorText,
+              };
+            }
+
+            const data = (await browserResponse.json()) as any;
+
+            if (data.success && data.result) {
+              artistName = data.result.artist_name;
+              releaseTitle = data.result.release_title;
+            } else {
+              console.error("Browser Rendering API unexpected response:", data);
+              return { skipped: true, reason: "browser-rendering-no-result" };
             }
           } catch (e) {
-            console.error("AI Parse error", e);
-            return { skipped: true, reason: "ai-parse-error" };
+            console.error("Browser Rendering fetch error", e);
+            return { skipped: true, reason: "browser-rendering-fetch-error" };
           }
 
           if (!artistName || !releaseTitle) {

@@ -11,6 +11,8 @@ interface Env {
   DB: D1Database;
   REVIEW_FETCHER_WORKFLOW: Workflow;
   AI: Ai;
+  CLOUDFLARE_ACCOUNT_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
 }
 
 export default {
@@ -94,7 +96,7 @@ export default {
 
         return new Response(route.renderToStream(), {
           headers: {
-            "Content-Type": "text/html",
+            "Content-Type": "text/html; charset=UTF-8",
           },
         });
       },
@@ -104,7 +106,7 @@ export default {
   },
   async scheduled(event, env: Env, ctx: ExecutionContext) {
     await env.REVIEW_FETCHER_WORKFLOW.create({
-      id: `review-fetcher-${new Date().toISOString().replace(/[:.]/g, "-")}`, 
+      id: `review-fetcher-${new Date().toISOString().replace(/[:.]/g, "-")}`,
       params: {},
     });
   },

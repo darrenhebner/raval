@@ -10,7 +10,7 @@ export function* Home() {
         html`<li>
           ${release.title} -
           ${release.artists.map((artist) => artist.name).join(", ")}
-          ${release.mbid}
+          <a href="https://musicbrainz.org/release-group/${release.mbid}">Musicbrainz</p>
           <ul>
             ${release.reviews.map(
               (review) =>
