@@ -9,5 +9,8 @@
   "devDependencies": {
     "tsx": "^4.21.0",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "htm": "^3.1.1"
   }
 }

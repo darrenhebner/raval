@@ -1,9 +1,15 @@
+import htm from "htm";
+
 export interface Context<T> {
   [Symbol.iterator](): Generator<Context<T>, T, unknown>;
 }
 
+const VnodeSymbol = Symbol("Vnode");
+const ContextSymbol = Symbol("Context");
+
 export function createContext<T>(): Context<T> {
   const context = {
+    [ContextSymbol]: true,
     *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
       return (yield context) as T;
     },
@@ -11,9 +17,82 @@ export function createContext<T>(): Context<T> {
   return context;
 }
 
+function isContext(input: unknown): input is Context<any> {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    (input as any)[ContextSymbol] === true
+  );
+}
+
 type Html = string & { __brand: "html" };
 
-export function html(
+export interface Vnode {
+  type: any;
+  props: Record<string, any>;
+  children: any[];
+  kind?: "start" | "end";
+}
+
+function isVnode(input: unknown): input is Vnode {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    (input as any)[VnodeSymbol] === true
+  );
+}
+
+type ExtractYields<T> = T extends Generator<infer Y, any, any>
+  ? Y
+  : T extends (props: any) => Generator<infer Y, any, any>
+  ? Y
+  : T extends { [Symbol.iterator](): Generator<infer Y, any, any> }
+  ? Y
+  : T extends ReadonlyArray<infer U>
+  ? ExtractYields<U>
+  : never;
+
+interface HtmlTag {
+  <Values extends any[]>(
+    strings: TemplateStringsArray,
+    ...values: Values
+  ): Generator<
+    (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode,
+    void,
+    unknown
+  >;
+}
+
+export const html: HtmlTag = htm.bind(function* (type, props, ...children) {
+  const finalProps = { ...props, children };
+  if (typeof type === "function") {
+    const result = yield* type(finalProps);
+    // If the component returns a generator/iterator (e.g. return html`...`), yield* it.
+    if (result && typeof result[Symbol.iterator] === "function") {
+      yield* result;
+    }
+    return;
+  }
+
+  yield { type, props, children, kind: "start", [VnodeSymbol]: true } as Vnode;
+
+  for (const child of children) {
+    if (Array.isArray(child)) {
+      for (const c of child) {
+        if (typeof c === "string" || typeof c === "number") yield String(c);
+        else if (c && typeof c[Symbol.iterator] === "function") yield* c;
+      }
+    } else if (typeof child === "string" || typeof child === "number") {
+      yield String(child);
+    } else if (child && typeof child[Symbol.iterator] === "function") {
+      yield* child;
+    }
+  }
+
+  yield { type, props, children, kind: "end", [VnodeSymbol]: true } as Vnode;
+}) as any;
+
+export function html2(
   strings: TemplateStringsArray,
   ...values: (string | number | Html | (string | number | Html)[])[]
 ): Html {
@@ -32,24 +111,11 @@ export function html(
   return result as Html;
 }
 
-export function* map<T, Return, Yields, Next>(
-  items: Iterable<T>,
-  fn: (item: T, index: number) => Generator<Yields, Return, Next>,
-): Generator<Yields, Return[], Next> {
-  const results: Return[] = [];
-  let i = 0;
-  for (const item of items) {
-    results.push(yield* fn(item, i));
-    i++;
-  }
-  return results;
-}
-
 export class Route<Yields = never, Satisfied = never> {
   #context = new Map<unknown, unknown>();
-  #app: () => Generator<Yields, Html, unknown>;
+  #app: () => Generator<Yields, Html | void, unknown>;
 
-  constructor(app: () => Generator<Yields, Html, unknown>) {
+  constructor(app: () => Generator<Yields, Html | void, unknown>) {
     this.#app = app;
   }
 
@@ -66,7 +132,7 @@ export class Route<Yields = never, Satisfied = never> {
     >;
   }
 
-  renderToStream(this: Route<never>) {
+  renderToStream(this: Route<Vnode | void | undefined>) {
     const encoder = new TextEncoder();
     const app = this.#app;
     const contextMap = this.#context;
@@ -74,58 +140,50 @@ export class Route<Yields = never, Satisfied = never> {
     return new ReadableStream({
       start(controller) {
         try {
-          const stack: Generator<unknown, unknown, unknown>[] = [];
-          let currentGenerator: Generator<unknown, unknown, unknown> = app();
+          const generator = app();
           let nextInput: unknown;
+          let result = generator.next();
 
           while (true) {
-            const result = currentGenerator.next(nextInput);
-
-            if (result.done) {
-              if (stack.length === 0) {
-                if (typeof result.value === "string") {
-                  controller.enqueue(encoder.encode(result.value));
-                }
-                controller.close();
-                return;
-              } else {
-                nextInput = result.value;
-                currentGenerator = stack.pop()!;
-                continue;
-              }
-            }
-
             const value = result.value;
 
-            if (contextMap.has(value)) {
-              const provider = contextMap.get(value);
-              if (typeof provider === "function") {
-                // Check if it's a generator factory
-                const potentialGenerator = (
-                  provider as () => Generator<unknown, unknown, unknown>
-                )();
-
-                if (
-                  potentialGenerator &&
-                  typeof potentialGenerator.next === "function"
-                ) {
-                  stack.push(currentGenerator);
-                  currentGenerator = potentialGenerator;
-                  nextInput = undefined;
-                } else {
-                  // It was a value function, not a generator factory.
-                  nextInput = provider;
-                }
-              } else {
-                nextInput = provider;
-              }
-            } else {
+            if (result.done) {
               if (typeof value === "string") {
                 controller.enqueue(encoder.encode(value));
               }
+              break;
+            }
+
+            if (isContext(value)) {
+              const context = contextMap.get(value);
+              if (context === undefined) {
+                throw new Error("Context not provided");
+              }
+              nextInput = context;
+            } else if (isVnode(value)) {
+              if (value.kind === "start" && typeof value.type === "string") {
+                let attrs = "";
+                if (value.props) {
+                  for (const [k, v] of Object.entries(value.props)) {
+                    if (k === "children") continue;
+                    attrs += ` ${k}="${v}"`;
+                  }
+                }
+                controller.enqueue(encoder.encode(`<${value.type}${attrs}>`));
+              } else if (value.kind === "end" && typeof value.type === "string") {
+                controller.enqueue(encoder.encode(`</${value.type}>`));
+              }
+              nextInput = undefined;
+            } else if (typeof value === "string") {
+              controller.enqueue(encoder.encode(value));
+              nextInput = undefined;
+            } else {
               nextInput = undefined;
             }
+
+            result = generator.next(nextInput);
           }
+          controller.close();
         } catch (e) {
           controller.error(e);
         }
