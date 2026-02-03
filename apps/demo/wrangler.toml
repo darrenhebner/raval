@@ -15,7 +15,18 @@ enabled = true
 # Example: API_KEY = "your-api-key-here"
 # Note: Secrets should be set using: npx wrangler secret put SECRET_NAME
 
+[triggers]
+crons = ["0 */12 * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "streamweaver-demo-db"
 database_id = "80de3118-ff54-4f1a-b8df-443ca4a2e5e6"
+
+[ai]
+binding = "AI"
+
+[[workflows]]
+name = "review-fetcher"
+binding = "REVIEW_FETCHER_WORKFLOW"
+class_name = "ReviewFetcherWorkflow"

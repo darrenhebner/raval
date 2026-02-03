@@ -5,12 +5,25 @@ import { Home } from "./routes/home";
 import { FeedContext } from "./shared/feed";
 import type { Release } from "./shared/types";
 
+export { ReviewFetcherWorkflow } from "./workflows/ReviewFetcherWorkflow";
+
 interface Env {
   DB: D1Database;
+  REVIEW_FETCHER_WORKFLOW: Workflow;
+  AI: Ai;
 }
 
 export default {
   async fetch(request, env: Env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/__scheduled") {
+      await env.REVIEW_FETCHER_WORKFLOW.create({
+        id: `review-fetcher-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+        params: {},
+      });
+      return new Response("Scheduled workflow triggered manually");
+    }
+
     const router = createRouter();
 
     router.map(routes, {
@@ -21,7 +34,7 @@ export default {
             r.mbid as release_mbid, r.title as release_title, r.type as release_type,
             a.mbid as artist_mbid, a.name as artist_name,
             rv.url as review_url, rv.score as review_score,
-            p.name as pub_name, p.url as pub_url
+            p.name as pub_name, p.url as pub_url, p.feed_url as pub_feed_url
           FROM releases r
           JOIN release_artists ra ON r.mbid = ra.release_mbid
           JOIN artists a ON ra.artist_mbid = a.mbid
@@ -67,6 +80,7 @@ export default {
               publication: {
                 name: row.pub_name as string,
                 url: row.pub_url as string,
+                feedUrl: row.pub_feed_url as string,
               },
             });
           }
@@ -88,5 +102,10 @@ export default {
 
     return router.fetch(request.url);
   },
-  scheduled() {},
+  async scheduled(event, env: Env, ctx: ExecutionContext) {
+    await env.REVIEW_FETCHER_WORKFLOW.create({
+      id: `review-fetcher-${new Date().toISOString().replace(/[:.]/g, "-")}`, 
+      params: {},
+    });
+  },
 } satisfies ExportedHandler<Env>;

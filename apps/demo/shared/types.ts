@@ -14,6 +14,7 @@ export interface Release {
 
 export interface Publication {
   url: string;
+  feedUrl: string;
   name: string;
 }
 

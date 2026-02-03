@@ -8,5 +8,5 @@
     "module": "ES2022",
     "moduleResolution": "bundler",
   },
-  "include": ["server.ts", "routes/**/*", "shared/**/*"],
+  "include": ["server.ts", "routes/**/*", "shared/**/*", "workflows/**/*"],
 }
