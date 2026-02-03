@@ -1,5 +1,5 @@
 import { createRouter, route } from "@remix-run/fetch-router";
-import { createContext, html, map, Route } from "streamweaver";
+import { createContext, html, Route } from "streamweaver";
 
 interface Data {
   name: string;
@@ -25,7 +25,7 @@ function* Footer() {
   return html`<footer>At is since ${year}</footer>`;
 }
 
-function* User(user: string) {
+function* User({ user }: { user: string }) {
   const { id } = yield* ParamsContext;
   return html`<li data-id="${id}">
     ${user} <a href="${routes.user.href({ user })}">Visit</a>
@@ -34,22 +34,21 @@ function* User(user: string) {
 
 function* Home() {
   const { name } = yield* DataContext;
-  const footer = yield* Footer();
 
-  const users = ["Bob", "Jim", "Jude"];
+  const users = ["bob", "jude"];
 
-  return html`<main>
+  yield* html`<main id="main">
     <h1>hi, ${name}.</h1>
     <ul>
-      ${users.length > 0 ? yield* map(users, User) : ""}
+      ${users.map((user) => html`<${User} user=${user} />`)}
     </ul>
-    ${footer}
+    <${Footer} />
   </main>`;
 }
 
 function* ShowUser() {
   const { name } = yield* UserContext;
-  return html`<main>
+  yield* html`<main>
     Name: ${name}. <a href="${routes.home.href()}">Home</a>
   </main>`;
 }
