@@ -14,3 +14,8 @@ enabled = true
 # Set your environment variables here
 # Example: API_KEY = "your-api-key-here"
 # Note: Secrets should be set using: npx wrangler secret put SECRET_NAME
+
+[[d1_databases]]
+binding = "DB"
+database_name = "streamweaver-demo-db"
+database_id = "80de3118-ff54-4f1a-b8df-443ca4a2e5e6"

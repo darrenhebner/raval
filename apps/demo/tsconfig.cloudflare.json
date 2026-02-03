@@ -6,7 +6,7 @@
     "lib": ["ES2024"],
     "target": "ES2022",
     "module": "ES2022",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
   },
-  "include": ["server.ts"]
+  "include": ["server.ts", "routes/**/*", "shared/**/*"],
 }

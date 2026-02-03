@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "shipit": "pnpm run build && wrangler deploy",
     "typecheck": "tsc -b"
   },
   "dependencies": {
     "@remix-run/fetch-router": "^0.16.0",
+    "fast-xml-parser": "^5.3.4",
+    "musicbrainz-api": "^1.0.0",
     "streamweaver": "workspace:*"
   },
   "devDependencies": {
