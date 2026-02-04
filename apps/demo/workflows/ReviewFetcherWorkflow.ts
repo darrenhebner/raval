@@ -25,6 +25,22 @@ const publications: Publication[] = [
     url: "https://pitchfork.com",
     feedUrl: "https://pitchfork.com/feed/feed-album-reviews/rss",
   },
+  {
+    name: "NME",
+    url: "https://nme.com",
+    feedUrl: "https://www.nme.com/reviews/album/feed",
+  },
+  {
+    name: "Consequence",
+    url: "https://consequence.net",
+    feedUrl:
+      "https://consequence.net/category/reviews/feed/?category=album-reviews",
+  },
+  {
+    name: "Stereogum",
+    url: "https://stereogum.com",
+    feedUrl: "https://stereogum.com/category/reviews/album-of-the-week/feed",
+  },
 ];
 
 const mbApi = new MusicBrainzApi({
@@ -232,9 +248,15 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Insert Review
           await this.env.DB.prepare(
-            "INSERT INTO reviews (publication_id, release_mbid, url, title, created_at) VALUES (?, ?, ?, ?, unixepoch())",
+            "INSERT INTO reviews (publication_id, release_mbid, url, title, published_at, created_at) VALUES (?, ?, ?, ?, ?, unixepoch())",
           )
-            .bind(pubId, releaseGroup.id, itemUrl, item.title)
+            .bind(
+              pubId,
+              releaseGroup.id,
+              itemUrl,
+              item.title,
+              item.pubDate ? new Date(item.pubDate).toISOString() : null,
+            )
             .run();
 
           return {

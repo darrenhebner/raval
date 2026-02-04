@@ -122,7 +122,10 @@ export class Route<Yields = never, Satisfied = never> {
   setContext<C extends Yields, NewYields = never>(
     context: C,
     value: C extends Context<infer V>
-      ? V | (() => Generator<NewYields, V, unknown>)
+      ?
+          | V
+          | (() => Generator<NewYields, V, unknown>)
+          | (() => AsyncGenerator<NewYields, V, unknown>)
       : never,
   ) {
     this.#context.set(context, value);
@@ -138,28 +141,59 @@ export class Route<Yields = never, Satisfied = never> {
     const contextMap = this.#context;
 
     return new ReadableStream({
-      start(controller) {
+      async start(controller) {
         try {
-          const generator = app();
-          let nextInput: unknown;
-          let result = generator.next();
+          const stack = [{ gen: app(), nextInput: undefined as unknown }];
 
-          while (true) {
-            const value = result.value;
+          while (stack.length > 0) {
+            const frame = stack[stack.length - 1];
+            const { gen } = frame;
+
+            let result = gen.next(frame.nextInput);
+            if (result instanceof Promise) {
+              result = await result;
+            }
 
             if (result.done) {
-              if (typeof value === "string") {
-                controller.enqueue(encoder.encode(value));
+              const value = result.value;
+              stack.pop();
+
+              if (stack.length > 0) {
+                stack[stack.length - 1].nextInput = value;
+              } else {
+                if (typeof value === "string") {
+                  controller.enqueue(encoder.encode(value));
+                }
               }
-              break;
+              continue;
             }
+
+            const value = result.value;
+            frame.nextInput = undefined;
 
             if (isContext(value)) {
               const context = contextMap.get(value);
               if (context === undefined) {
                 throw new Error("Context not provided");
               }
-              nextInput = context;
+
+              if (typeof context === "function") {
+                const possibleGen = (context as Function)();
+                if (
+                  possibleGen &&
+                  typeof (possibleGen as any).next === "function"
+                ) {
+                  stack.push({
+                    gen: possibleGen as any,
+                    nextInput: undefined,
+                  });
+                  continue;
+                } else {
+                  frame.nextInput = possibleGen;
+                }
+              } else {
+                frame.nextInput = context;
+              }
             } else if (isVnode(value)) {
               if (value.kind === "start" && typeof value.type === "string") {
                 let attrs = "";
@@ -170,18 +204,19 @@ export class Route<Yields = never, Satisfied = never> {
                   }
                 }
                 controller.enqueue(encoder.encode(`<${value.type}${attrs}>`));
-              } else if (value.kind === "end" && typeof value.type === "string") {
+              } else if (
+                value.kind === "end" &&
+                typeof value.type === "string"
+              ) {
                 controller.enqueue(encoder.encode(`</${value.type}>`));
               }
-              nextInput = undefined;
+              frame.nextInput = undefined;
             } else if (typeof value === "string") {
               controller.enqueue(encoder.encode(value));
-              nextInput = undefined;
+              frame.nextInput = undefined;
             } else {
-              nextInput = undefined;
+              frame.nextInput = undefined;
             }
-
-            result = generator.next(nextInput);
           }
           controller.close();
         } catch (e) {
