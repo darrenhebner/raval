@@ -20,6 +20,7 @@ export function* Home() {
               (review) =>
                 html`<li>
                   ${review.publication.name} <a href="${review.url}">Visit</a>
+                  ${review.snippet ? html`<blockquote>${review.snippet}</blockquote>` : ""}
                 </li>`,
             )}
           </ul>

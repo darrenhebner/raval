@@ -117,7 +117,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // 5. Extract information using Cloudflare Browser Rendering /json endpoint
           console.log(`Extracting data for: ${itemUrl}`);
-          let artistName, releaseTitle;
+          let artistName, releaseTitle, snippet;
 
           try {
             const browserResponse = await fetch(
@@ -131,7 +131,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
                 body: JSON.stringify({
                   url: itemUrl,
                   prompt:
-                    "Extract the Artist Name and Release Title from this review page.",
+                    "Extract the Artist Name, Release Title, and a representative Snippet (1-2 sentences direct quote) from this review page.",
                   response_format: {
                     type: "json_schema",
                     schema: {
@@ -143,8 +143,11 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
                         release_title: {
                           type: "string",
                         },
+                        snippet: {
+                          type: "string",
+                        },
                       },
-                      required: ["artist_name", "release_title"],
+                      required: ["artist_name", "release_title", "snippet"],
                     },
                   },
                 }),
@@ -166,6 +169,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             if (data.success && data.result) {
               artistName = data.result.artist_name;
               releaseTitle = data.result.release_title;
+              snippet = data.result.snippet;
               console.log(
                 `Extracted: Artist="${artistName}", Release="${releaseTitle}"`,
               );
@@ -298,13 +302,14 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Insert Review
           await this.env.DB.prepare(
-            "INSERT INTO reviews (publication_id, release_mbid, url, title, published_at, created_at) VALUES (?, ?, ?, ?, ?, unixepoch())",
+            "INSERT INTO reviews (publication_id, release_mbid, url, title, snippet, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch())",
           )
             .bind(
               pubId,
               canonicalRelease.id,
               itemUrl,
               item.title,
+              snippet,
               item.pubDate ? new Date(item.pubDate).toISOString() : null,
             )
             .run();

@@ -22,6 +22,7 @@ export interface Review {
   url: string;
   publication: Publication;
   release: Release;
+  snippet?: string;
 }
 
 export interface Feed {

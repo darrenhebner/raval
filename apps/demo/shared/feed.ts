@@ -22,7 +22,7 @@ export async function* FeedHandler() {
   SELECT
     r.mbid as release_mbid, r.title as release_title, r.type as release_type,
     a.mbid as artist_mbid, a.name as artist_name,
-    rv.url as review_url, rv.score as review_score, rv.published_at as review_date,
+    rv.url as review_url, rv.score as review_score, rv.snippet as review_snippet, rv.published_at as review_date,
     p.name as pub_name, p.url as pub_url, p.feed_url as pub_feed_url
   FROM top_releases tr
   JOIN releases r ON tr.mbid = r.mbid
@@ -66,6 +66,7 @@ export async function* FeedHandler() {
       release.reviews.push({
         url: reviewUrl,
         release: release,
+        snippet: row.review_snippet as string,
         publication: {
           name: row.pub_name as string,
           url: row.pub_url as string,

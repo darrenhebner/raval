@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   release_mbid TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
   title TEXT,
+  snippet TEXT,
   score TEXT,
   author TEXT,
   published_at TEXT,
