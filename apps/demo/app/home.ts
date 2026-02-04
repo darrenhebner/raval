@@ -1,5 +1,6 @@
 import { html } from "streamweaver";
 import { FeedContext } from "../shared/feed";
+import { routes } from "./routes";
 
 export function* Home() {
   const { releases } = yield* FeedContext;
@@ -10,7 +11,10 @@ export function* Home() {
         html`<li>
           ${release.title} -
           ${release.artists.map((artist) => artist.name).join(", ")}
-          <a href="https://musicbrainz.org/release-group/${release.mbid}">Musicbrainz</p>
+          <a href="https://musicbrainz.org/release-group/${release.mbid}"
+            >Musicbrainz</a
+          >
+          <a href="${routes.release.href({ mbid: release.mbid })}">View</a>
           <ul>
             ${release.reviews.map(
               (review) =>
