@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS releases (
   title TEXT NOT NULL,
   type TEXT,
   date TEXT,
+  artwork_url TEXT,
   created_at INTEGER DEFAULT (unixepoch())
 );
 

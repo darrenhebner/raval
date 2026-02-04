@@ -8,6 +8,7 @@ export interface Release {
   mbid: string;
   artists: Artist[];
   title: string;
+  artworkUrl?: string;
   type: "single" | "album" | "ep" | "broadcast" | "other";
   reviews: Review[];
 }

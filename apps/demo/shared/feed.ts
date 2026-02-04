@@ -20,7 +20,7 @@ export async function* FeedHandler() {
     LIMIT 50
   )
   SELECT
-    r.mbid as release_mbid, r.title as release_title, r.type as release_type,
+    r.mbid as release_mbid, r.title as release_title, r.type as release_type, r.artwork_url as release_artwork_url,
     a.mbid as artist_mbid, a.name as artist_name,
     rv.url as review_url, rv.score as review_score, rv.snippet as review_snippet, rv.published_at as review_date,
     p.name as pub_name, p.url as pub_url, p.feed_url as pub_feed_url
@@ -42,6 +42,7 @@ export async function* FeedHandler() {
       releasesMap.set(releaseMbid, {
         mbid: releaseMbid,
         title: row.release_title as string,
+        artworkUrl: row.release_artwork_url as string,
         type: (row.release_type || "album") as any,
         artists: [],
         reviews: [],

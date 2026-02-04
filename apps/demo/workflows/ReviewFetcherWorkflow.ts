@@ -4,7 +4,7 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import { XMLParser } from "fast-xml-parser";
-import { MusicBrainzApi } from "musicbrainz-api";
+import { MusicBrainzApi, CoverArtArchiveApi } from "musicbrainz-api";
 import type { Publication } from "../shared/types";
 
 interface Env {
@@ -48,6 +48,8 @@ const mbApi = new MusicBrainzApi({
   appVersion: "0.0.1",
   appContactInfo: "darren@example.com",
 });
+
+const coverArtApi = new CoverArtArchiveApi();
 
 export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<any>, step: WorkflowStep) {
@@ -254,6 +256,22 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             `Found canonical release: ${canonicalRelease.title} (${canonicalRelease.id}) - Date: ${canonicalRelease.date}`,
           );
 
+          // Fetch Artwork
+          console.log(`Fetching artwork for release group: ${releaseGroup.id}`);
+          let artworkUrl: string | null = null;
+          try {
+            const coverInfo = await coverArtApi.getReleaseGroupCovers(
+              releaseGroup.id,
+            );
+            const front = coverInfo.images.find((img: any) => img.front);
+            if (front) {
+              artworkUrl = front.image;
+              console.log(`Found artwork: ${artworkUrl}`);
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch artwork for ${releaseGroup.id}`);
+          }
+
           // 7. Save to database
           // We need to insert Publication (if not exists), Artist, Release, ReleaseArtist, Review
           console.log("Saving to database...");
@@ -283,13 +301,14 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Insert Release
           await this.env.DB.prepare(
-            "INSERT OR IGNORE INTO releases (mbid, title, type, date) VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO releases (mbid, title, type, date, artwork_url) VALUES (?, ?, ?, ?, ?)",
           )
             .bind(
               canonicalRelease.id,
               canonicalRelease.title,
               releaseGroup["primary-type"],
               canonicalRelease.date,
+              artworkUrl,
             )
             .run();
 
