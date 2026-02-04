@@ -110,13 +110,13 @@ export default {
               appVersion: "0.0.1",
               appContactInfo: "info@streamweaver.com",
             });
-            const result = await mbApi.lookup("release-group", params.mbid, [
+            const result = await mbApi.lookup("release", params.mbid, [
               "artists",
-              "releases",
               "media",
+              "url-rels",
             ]);
 
-            return result.releases[0];
+            return result;
           })
           .setContext(EnvContext, env);
 

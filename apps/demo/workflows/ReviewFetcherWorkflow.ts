@@ -25,22 +25,22 @@ const publications: Publication[] = [
     url: "https://pitchfork.com",
     feedUrl: "https://pitchfork.com/feed/feed-album-reviews/rss",
   },
-  {
-    name: "NME",
-    url: "https://nme.com",
-    feedUrl: "https://www.nme.com/reviews/album/feed",
-  },
-  {
-    name: "Consequence",
-    url: "https://consequence.net",
-    feedUrl:
-      "https://consequence.net/category/reviews/feed/?category=album-reviews",
-  },
-  {
-    name: "Stereogum",
-    url: "https://stereogum.com",
-    feedUrl: "https://stereogum.com/category/reviews/album-of-the-week/feed",
-  },
+  // {
+  //   name: "NME",
+  //   url: "https://nme.com",
+  //   feedUrl: "https://www.nme.com/reviews/album/feed",
+  // },
+  // {
+  //   name: "Consequence",
+  //   url: "https://consequence.net",
+  //   feedUrl:
+  //     "https://consequence.net/category/reviews/feed/?category=album-reviews",
+  // },
+  // {
+  //   name: "Stereogum",
+  //   url: "https://stereogum.com",
+  //   feedUrl: "https://stereogum.com/category/reviews/album-of-the-week/feed",
+  // },
 ];
 
 const mbApi = new MusicBrainzApi({
@@ -95,6 +95,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
         if (!stepId) continue;
 
         await step.do(`process-item-${pub.name}-${stepId}`, async () => {
+          console.log(`Processing item: ${item.title} (${itemIdentifier})`);
           const itemUrl =
             typeof item.link === "string"
               ? item.link
@@ -110,10 +111,12 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             .first();
 
           if (existing) {
+            console.log(`Skipping existing review: ${itemUrl}`);
             return { skipped: true, reason: "exists" };
           }
 
           // 5. Extract information using Cloudflare Browser Rendering /json endpoint
+          console.log(`Extracting data for: ${itemUrl}`);
           let artistName, releaseTitle;
 
           try {
@@ -163,6 +166,9 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             if (data.success && data.result) {
               artistName = data.result.artist_name;
               releaseTitle = data.result.release_title;
+              console.log(
+                `Extracted: Artist="${artistName}", Release="${releaseTitle}"`,
+              );
             } else {
               console.error("Browser Rendering API unexpected response:", data);
               return { skipped: true, reason: "browser-rendering-no-result" };
@@ -173,10 +179,12 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           }
 
           if (!artistName || !releaseTitle) {
+            console.warn("AI missing data");
             return { skipped: true, reason: "ai-missing-data" };
           }
 
           // 6. Look up MusicBrainz ID
+          console.log(`Searching MusicBrainz for artist: "${artistName}"`);
           // Search for artist
           const artistSearch = await mbApi.search("artist", {
             query: artistName,
@@ -185,10 +193,15 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           const artist = artistSearch.artists[0];
 
           if (!artist) {
+            console.warn(`Artist not found: "${artistName}"`);
             return { skipped: true, reason: "artist-not-found" };
           }
+          console.log(`Found artist: ${artist.name} (${artist.id})`);
 
           // Search for release group or release by artist
+          console.log(
+            `Searching MusicBrainz for release: "${releaseTitle}" by "${artist.name}"`,
+          );
           const releaseSearch = await mbApi.search("release-group", {
             query: `release:${releaseTitle} AND artist:${artist.name}`,
             limit: 1,
@@ -198,11 +211,48 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           // Or search specific release if needed, but release-group is usually better for reviews
 
           if (!releaseGroup) {
+            console.warn(`Release group not found: "${releaseTitle}"`);
             return { skipped: true, reason: "release-not-found" };
           }
+          console.log(
+            `Found release group: ${releaseGroup.title} (${releaseGroup.id})`,
+          );
+
+          // Find Canonical Release (Earliest Official Release)
+          console.log(
+            `Finding canonical release for group: ${releaseGroup.id}`,
+          );
+
+          const groupData = await mbApi.lookup(
+            "release-group",
+            releaseGroup.id,
+            ["releases"],
+          );
+
+          if (!groupData.releases || groupData.releases.length === 0) {
+            return { skipped: true, reason: "no-releases-in-group" };
+          }
+
+          groupData.releases.sort((a, b) => {
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return a.date.localeCompare(b.date);
+          });
+
+          const canonicalRelease = groupData.releases[0];
+
+          if (!canonicalRelease) {
+            console.warn("No releases found in group");
+            return { skipped: true, reason: "no-releases-in-group" };
+          }
+
+          console.log(
+            `Found canonical release: ${canonicalRelease.title} (${canonicalRelease.id}) - Date: ${canonicalRelease.date}`,
+          );
 
           // 7. Save to database
           // We need to insert Publication (if not exists), Artist, Release, ReleaseArtist, Review
+          console.log("Saving to database...");
 
           // Note: using raw SQL for now as we don't have an ORM set up in this file
 
@@ -232,10 +282,10 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             "INSERT OR IGNORE INTO releases (mbid, title, type, date) VALUES (?, ?, ?, ?)",
           )
             .bind(
-              releaseGroup.id,
-              releaseGroup.title,
+              canonicalRelease.id,
+              canonicalRelease.title,
               releaseGroup["primary-type"],
-              releaseGroup["first-release-date"],
+              canonicalRelease.date,
             )
             .run();
 
@@ -243,7 +293,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           await this.env.DB.prepare(
             "INSERT OR IGNORE INTO release_artists (release_mbid, artist_mbid) VALUES (?, ?)",
           )
-            .bind(releaseGroup.id, artist.id)
+            .bind(canonicalRelease.id, artist.id)
             .run();
 
           // Insert Review
@@ -252,17 +302,19 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           )
             .bind(
               pubId,
-              releaseGroup.id,
+              canonicalRelease.id,
               itemUrl,
               item.title,
               item.pubDate ? new Date(item.pubDate).toISOString() : null,
             )
             .run();
 
+          console.log("Successfully saved review.");
+
           return {
             success: true,
             artist: artist.name,
-            release: releaseGroup.title,
+            release: canonicalRelease.title,
           };
         });
       }

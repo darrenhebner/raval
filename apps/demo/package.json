@@ -8,7 +8,9 @@
     "build": "vite build",
     "shipit": "pnpm run build && wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "db:reset:local": "wrangler d1 execute streamweaver-demo-db --local --file=./schema.sql",
+    "db:reset:prod": "wrangler d1 execute streamweaver-demo-db --remote --file=./schema.sql"
   },
   "dependencies": {
     "@remix-run/fetch-router": "^0.16.0",

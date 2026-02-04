@@ -11,7 +11,7 @@ export function* Home() {
         html`<li>
           ${release.title} -
           ${release.artists.map((artist) => artist.name).join(", ")}
-          <a href="https://musicbrainz.org/release-group/${release.mbid}"
+          <a href="https://musicbrainz.org/release/${release.mbid}"
             >Musicbrainz</a
           >
           <a href="${routes.release.href({ mbid: release.mbid })}">View</a>
