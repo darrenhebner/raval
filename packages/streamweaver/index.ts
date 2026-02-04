@@ -27,6 +27,39 @@ function isContext(input: unknown): input is Context<any> {
 
 type Html = string & { __brand: "html" };
 
+export const CssSymbol = Symbol("CSS");
+
+export interface Css {
+  content: string;
+  [CssSymbol]: true;
+}
+
+export function isCss(input: unknown): input is Css {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    (input as any)[CssSymbol] === true
+  );
+}
+
+export function css(strings: TemplateStringsArray, ...values: any[]): Css {
+  let content: string = "";
+
+  for (let i = 0; i < strings.length; i++) {
+    content += strings[i];
+    const value = values[i];
+
+    if (value) {
+      content += value;
+    }
+  }
+
+  return {
+    content,
+    [CssSymbol]: true,
+  };
+}
+
 export interface Vnode {
   type: any;
   props: Record<string, any>;
@@ -42,22 +75,24 @@ function isVnode(input: unknown): input is Vnode {
   );
 }
 
-type ExtractYields<T> = T extends Generator<infer Y, any, any>
-  ? Y
-  : T extends (props: any) => Generator<infer Y, any, any>
-  ? Y
-  : T extends { [Symbol.iterator](): Generator<infer Y, any, any> }
-  ? Y
-  : T extends ReadonlyArray<infer U>
-  ? ExtractYields<U>
-  : never;
+type ExtractYields<T> =
+  T extends Generator<infer Y, any, any>
+    ? Y
+    : T extends (props: any) => Generator<infer Y, any, any>
+      ? Y
+      : T extends { [Symbol.iterator](): Generator<infer Y, any, any> }
+        ? Y
+        : T extends ReadonlyArray<infer U>
+          ? ExtractYields<U>
+          : never;
 
 interface HtmlTag {
   <Values extends any[]>(
     strings: TemplateStringsArray,
     ...values: Values
   ): Generator<
-    (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode,
+    | (Values[number] extends any ? ExtractYields<Values[number]> : never)
+    | Vnode,
     void,
     unknown
   >;
@@ -92,25 +127,6 @@ export const html: HtmlTag = htm.bind(function* (type, props, ...children) {
   yield { type, props, children, kind: "end", [VnodeSymbol]: true } as Vnode;
 }) as any;
 
-export function html2(
-  strings: TemplateStringsArray,
-  ...values: (string | number | Html | (string | number | Html)[])[]
-): Html {
-  let result = "";
-  for (let i = 0; i < strings.length; i++) {
-    result += strings[i];
-    if (i < values.length) {
-      const value = values[i];
-      if (Array.isArray(value)) {
-        result += value.join("");
-      } else {
-        result += value;
-      }
-    }
-  }
-  return result as Html;
-}
-
 export class Route<Yields = never, Satisfied = never> {
   #context = new Map<unknown, unknown>();
   #app: () => Generator<Yields, Html | void, unknown>;
@@ -135,10 +151,11 @@ export class Route<Yields = never, Satisfied = never> {
     >;
   }
 
-  renderToStream(this: Route<Vnode | void | undefined>) {
+  renderToStream(this: Route<Vnode | Css | undefined>) {
     const encoder = new TextEncoder();
     const app = this.#app;
     const contextMap = this.#context;
+    const styles = new Set<Css>();
 
     return new ReadableStream({
       async start(controller) {
@@ -152,6 +169,15 @@ export class Route<Yields = never, Satisfied = never> {
             let result = gen.next(frame.nextInput);
             if (result instanceof Promise) {
               result = await result;
+            }
+
+            // Only include each style once, when it is first encountered.
+            if (isCss(result.value) && !styles.has(result.value)) {
+              styles.add(result.value);
+
+              controller.enqueue(
+                encoder.encode(`<style>${result.value.content}</style>`),
+              );
             }
 
             if (result.done) {
@@ -218,6 +244,7 @@ export class Route<Yields = never, Satisfied = never> {
               frame.nextInput = undefined;
             }
           }
+
           controller.close();
         } catch (e) {
           controller.error(e);
