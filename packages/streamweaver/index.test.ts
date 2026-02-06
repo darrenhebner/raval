@@ -54,6 +54,21 @@ describe("streamweaver", () => {
         "<span>123</span>",
       );
     });
+
+    it("renders static content multiple times", async () => {
+      const app = function* (props: { val: number }) {
+        yield* html`<div>${props.val} <span>Static</span></div>`;
+      };
+
+      await expect(new Route(() => app({ val: 1 })).renderToStream()).toRender(
+        "<div>1 <span>Static</span></div>",
+      );
+
+      // Render again with different dynamic prop, but same static structure
+      await expect(new Route(() => app({ val: 2 })).renderToStream()).toRender(
+        "<div>2 <span>Static</span></div>",
+      );
+    });
   });
 
   describe("Route & Rendering", () => {

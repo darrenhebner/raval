@@ -104,41 +104,43 @@ interface HtmlTag {
   <Values extends any[]>(
     strings: TemplateStringsArray,
     ...values: Values
-  ): Generator<
+  ): Iterable<
     | (Values[number] extends any ? ExtractYields<Values[number]> : never)
-    | Vnode,
-    void,
-    unknown
+    | Vnode
   >;
 }
 
-export const html: HtmlTag = htm.bind(function* (type, props, ...children) {
-  const finalProps = { ...props, children };
-  if (typeof type === "function") {
-    if (type.constructor.name !== "GeneratorFunction") {
-      throw new InvalidComponentError();
-    }
+export const html: HtmlTag = htm.bind(function (type, props, ...children) {
+  return {
+    [Symbol.iterator]: function* () {
+      const finalProps = { ...props, children };
+      if (typeof type === "function") {
+        if (type.constructor.name !== "GeneratorFunction") {
+          throw new InvalidComponentError();
+        }
 
-    yield* type(finalProps);
-    return;
-  }
-
-  yield { type, props, children, kind: "start", [VnodeSymbol]: true } as Vnode;
-
-  for (const child of children) {
-    if (Array.isArray(child)) {
-      for (const c of child) {
-        if (typeof c === "string" || typeof c === "number") yield String(c);
-        else if (c && typeof c[Symbol.iterator] === "function") yield* c;
+        yield* type(finalProps);
+        return;
       }
-    } else if (typeof child === "string" || typeof child === "number") {
-      yield String(child);
-    } else if (child && typeof child[Symbol.iterator] === "function") {
-      yield* child;
-    }
-  }
 
-  yield { type, props, children, kind: "end", [VnodeSymbol]: true } as Vnode;
+      yield { type, props, children, kind: "start", [VnodeSymbol]: true } as Vnode;
+
+      for (const child of children) {
+        if (Array.isArray(child)) {
+          for (const c of child) {
+            if (typeof c === "string" || typeof c === "number") yield String(c);
+            else if (c && typeof c[Symbol.iterator] === "function") yield* c;
+          }
+        } else if (typeof child === "string" || typeof child === "number") {
+          yield String(child);
+        } else if (child && typeof child[Symbol.iterator] === "function") {
+          yield* child;
+        }
+      }
+
+      yield { type, props, children, kind: "end", [VnodeSymbol]: true } as Vnode;
+    },
+  };
 }) as any;
 
 export class Route<Yields = never, Satisfied = never> {
