@@ -1,4 +1,5 @@
 import { css, createContext, html } from "streamweaver";
+import type { ComponentProps } from "streamweaver";
 import { routes } from "../app/routes";
 import type { Review } from "./types";
 import { formatRelativeTime } from "./date";
@@ -65,7 +66,8 @@ export function* ReviewItem({
   snippet,
   release,
   publishedAt,
-}: Review) {
+  children,
+}: ComponentProps<Review>) {
   yield ReviewItemCss;
 
   yield* html`<li class="ReviewItem">
@@ -85,25 +87,7 @@ export function* ReviewItem({
       ${snippet
         ? html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`
         : ""}
-
-      <a
-        href="${routes.release.href({ mbid: release.mbid })}"
-        class="ReviewItemRelease"
-      >
-        <div>
-          <h4>${release.title}</h4>
-          <p>${release.artists.map((artist) => artist.name).join(", ")}</p>
-        </div>
-        ${release.artworkUrl
-          ? html`<img
-              class="ReviewItemArtwork"
-              src="${release.artworkUrl}"
-              alt="${release.title}"
-              width="50"
-              height="50"
-            />`
-          : ""}
-      </a>
+      ${children}
     </div>
   </li>`;
 }

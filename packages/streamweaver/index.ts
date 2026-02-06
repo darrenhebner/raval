@@ -109,6 +109,8 @@ interface HtmlTag {
   >;
 }
 
+export type ComponentProps<Props> = Props & { children: any[] };
+
 export const html: HtmlTag = htm.bind(function (type, props, ...children) {
   return {
     [Symbol.iterator]: function* () {
