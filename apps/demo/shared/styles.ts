@@ -5,6 +5,9 @@ export const ThemeCss = css`
     font-family:
       ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
       "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    background-color: #f2f4e6;
+    color: rgba(0, 0, 0, 0.8);
+    --highlight: #7d9004;
   }
 `;
 

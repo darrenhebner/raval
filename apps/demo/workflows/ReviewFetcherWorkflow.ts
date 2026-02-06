@@ -25,22 +25,27 @@ const publications: Publication[] = [
     url: "https://pitchfork.com",
     feedUrl: "https://pitchfork.com/feed/feed-album-reviews/rss",
   },
-  // {
-  //   name: "NME",
-  //   url: "https://nme.com",
-  //   feedUrl: "https://www.nme.com/reviews/album/feed",
-  // },
-  // {
-  //   name: "Consequence",
-  //   url: "https://consequence.net",
-  //   feedUrl:
-  //     "https://consequence.net/category/reviews/feed/?category=album-reviews",
-  // },
-  // {
-  //   name: "Stereogum",
-  //   url: "https://stereogum.com",
-  //   feedUrl: "https://stereogum.com/category/reviews/album-of-the-week/feed",
-  // },
+  {
+    name: "NME",
+    url: "https://nme.com",
+    feedUrl: "https://www.nme.com/reviews/album/feed",
+  },
+  {
+    name: "Consequence",
+    url: "https://consequence.net",
+    feedUrl:
+      "https://consequence.net/category/reviews/feed/?category=album-reviews",
+  },
+  {
+    name: "Stereogum",
+    url: "https://stereogum.com",
+    feedUrl: "https://stereogum.com/category/reviews/album-of-the-week/feed",
+  },
+  {
+    name: "Clash",
+    url: "https://www.clashmusic.com",
+    feedUrl: "https://www.clashmusic.com/reviews/feed",
+  },
 ];
 
 const mbApi = new MusicBrainzApi({

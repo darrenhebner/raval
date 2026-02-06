@@ -24,8 +24,9 @@ export interface Review {
   publication: Publication;
   release: Release;
   snippet?: string;
+  publishedAt: string;
 }
 
 export interface Feed {
-  releases: Release[];
+  reviews: Review[];
 }

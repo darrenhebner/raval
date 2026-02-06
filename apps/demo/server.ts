@@ -130,7 +130,7 @@ export default {
 
     return router.fetch(request.url);
   },
-  async scheduled(event, env: Env, ctx: ExecutionContext) {
+  async scheduled(_event, env) {
     await env.REVIEW_FETCHER_WORKFLOW.create({
       id: `review-fetcher-${new Date().toISOString().replace(/[:.]/g, "-")}`,
       params: {},

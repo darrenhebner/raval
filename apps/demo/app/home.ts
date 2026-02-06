@@ -1,104 +1,144 @@
 import { css, html } from "streamweaver";
 import { FeedContext } from "../shared/feed";
-import type { Release } from "../shared/types";
+import type { Review } from "../shared/types";
 import { ResetCss, ThemeCss } from "../shared/styles";
+import { formatRelativeTime } from "../shared/date";
 
-const ReleaseItemCss = css`
-  .ReleaseItemTrack {
+const ReviewItemCss = css`
+  .ReviewItem {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .ReviewItemIcon {
+    border-radius: 4px;
+  }
+
+  .ReviewItemHeading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .ReviewItemHeading h4 {
+    margin: 0;
+  }
+
+  .ReviewItemMeta {
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .ReviewItemRelease {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
   }
 
-  .ReleaseItemArtwork {
-    border-radius: 24px;
-    corner-shape: squircle;
+  .ReviewItemArtwork {
+    border-radius: 8px;
   }
 
-  .ReleaseItemReviews {
-    list-style: none;
-    font-size: 14px;
-    padding-left: 12px;
+  .ReviewItemSnippet {
+    max-width: 50ch;
+    margin: 0 0 12px 0;
   }
 
-  .ReleaseItemReviews > :not(:last-child) {
-    margin-bottom: 12px;
-  }
-
-  .ReleaseItemReviewHeading {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+  .ReviewItem:not(last-child) {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   }
 `;
 
-function* ReleaseItem({ artists, artworkUrl, title, reviews }: Release) {
-  yield ReleaseItemCss;
+function* ReviewItem({
+  publication,
+  snippet,
+  release,
+  publishedAt,
+  url,
+}: Review) {
+  yield ReviewItemCss;
 
-  yield* html`<li>
-    <div class="ReleaseItemTrack">
-      <div>
-        <h3>${title}</h3>
-        <p>${artists.map((artist) => artist.name).join(", ")}</p>
+  yield* html`<li class="ReviewItem">
+    <img
+      class="ReviewItemIcon"
+      height="32"
+      width="32"
+      src="https://www.google.com/s2/favicons?domain=${publication.url}&sz=32"
+      alt="${publication.name}"
+    />
+    <div>
+      <div class="ReviewItemHeading">
+        <h4>${publication.name}</h4>
+        <span class="ReviewItemMeta">${formatRelativeTime(publishedAt)}</span>
       </div>
-      ${artworkUrl
-        ? html`<img
-            class="ReleaseItemArtwork"
-            src="${artworkUrl}"
-            alt="${title}"
-            width="60"
-            height="60"
-          />`
+
+      ${snippet
+        ? html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`
         : ""}
+
+      <a href="${url}" target="_blank" class="ReviewItemRelease">
+        <div>
+          <h4>${release.title}</h4>
+          <p>${release.artists.map((artist) => artist.name).join(", ")}</p>
+        </div>
+        ${release.artworkUrl
+          ? html`<img
+              class="ReviewItemArtwork"
+              src="${release.artworkUrl}"
+              alt="${release.title}"
+              width="50"
+              height="50"
+            />`
+          : ""}
+      </a>
     </div>
-    <ul class="ReleaseItemReviews">
-      ${reviews.map(
-        (review) =>
-          html`<li class="ReleaseItemReview">
-            <h4 class="ReleaseItemReviewHeading">
-              <img
-                height="16"
-                width="16"
-                src="https://www.google.com/s2/favicons?domain=${review
-                  .publication.url}&sz=16"
-              />
-              <a href="${review.url}">${review.publication.name}</a>
-            </h4>
-            ${review.snippet
-              ? html`<blockquote>${review.snippet}</blockquote>`
-              : ""}
-          </li>`,
-      )}
-    </ul>
   </li>`;
 }
 
-const HomeCss = css`
+const FeedCss = css`
   .Container {
-    max-width: 600px;
-    margin: 16px auto;
-    width: 90%;
+    width: 100%;
+    max-width: max-content;
+    margin: 0;
   }
 
   .Feed {
     list-style: none;
-  }
-
-  .Feed > :not(:last-child) {
-    margin-bottom: 24px;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
   }
 `;
 
-export function* Home() {
+export function* Feed() {
   yield ResetCss;
   yield ThemeCss;
-  yield HomeCss;
+  yield FeedCss;
 
-  const { releases } = yield* FeedContext;
+  const { reviews } = yield* FeedContext;
 
   yield* html`<main class="Container">
     <ol class="Feed">
-      ${releases.map((release) => html`<${ReleaseItem} ...${release} />`)}
+      ${reviews.map((review) => html`<${ReviewItem} ...${review} />`)}
     </ol>
   </main>`;
+}
+
+export function* Home() {
+  yield* html`
+    <html lang="en-US">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <title>Music Review Feed</title>
+      </head>
+      <body>
+        <${Feed} />
+      </body>
+    </html>
+  `;
 }
