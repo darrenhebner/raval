@@ -101,11 +101,11 @@ interface HtmlTag {
 export const html: HtmlTag = htm.bind(function* (type, props, ...children) {
   const finalProps = { ...props, children };
   if (typeof type === "function") {
-    const result = yield* type(finalProps);
-    // If the component returns a generator/iterator (e.g. return html`...`), yield* it.
-    if (result && typeof result[Symbol.iterator] === "function") {
-      yield* result;
+    if (type.constructor.name !== "GeneratorFunction") {
+      throw new Error("Components must be generator functions");
     }
+
+    yield* type(finalProps);
     return;
   }
 
@@ -204,19 +204,24 @@ export class Route<Yields = never, Satisfied = never> {
               }
 
               if (typeof context === "function") {
-                const possibleGen = (context as Function)();
                 if (
-                  possibleGen &&
-                  typeof (possibleGen as any).next === "function"
+                  context.constructor.name === "GeneratorFunction" ||
+                  context.constructor.name === "AsyncGeneratorFunction"
                 ) {
-                  stack.push({
-                    gen: possibleGen as any,
-                    nextInput: undefined,
-                  });
-                  continue;
-                } else {
-                  frame.nextInput = possibleGen;
+                  const possibleGen = (context as Function)();
+                  if (
+                    possibleGen &&
+                    typeof (possibleGen as any).next === "function"
+                  ) {
+                    stack.push({
+                      gen: possibleGen as any,
+                      nextInput: undefined,
+                    });
+                    continue;
+                  }
                 }
+                // Fallback for plain functions: treated as value
+                frame.nextInput = context;
               } else {
                 frame.nextInput = context;
               }

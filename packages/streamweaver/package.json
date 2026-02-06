@@ -6,9 +6,13 @@
   "exports": {
     ".": "./index.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
     "tsx": "^4.21.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "htm": "^3.1.1"

@@ -9,6 +9,7 @@
     "shipit": "pnpm run build && wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsc -b",
+    "test": "echo 'No tests yet'",
     "db:reset:local": "wrangler d1 execute streamweaver-demo-db --local --file=./schema.sql",
     "db:reset:prod": "wrangler d1 execute streamweaver-demo-db --remote --file=./schema.sql"
   },
@@ -24,6 +25,7 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vitest": "^4.0.18",
     "wrangler": "catalog:"
   }
 }

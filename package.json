@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "test": "pnpm -r --parallel test"
   },
   "devDependencies": {
     "typescript": "catalog:"
