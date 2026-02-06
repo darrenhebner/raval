@@ -46,4 +46,29 @@ expect.extend({
       expected,
     };
   },
+  async toThrowCustomError(received: ReadableStream, expected: new (...args: any[]) => Error) {
+    const { isNot } = this;
+    let error: any;
+
+    try {
+      await streamToString(received);
+    } catch (e) {
+      error = e;
+    }
+
+    if (!error) {
+      return {
+        pass: false,
+        message: () => `Expected stream to throw ${expected.name}, but it rendered successfully.`,
+      };
+    }
+
+    const pass = error instanceof expected;
+
+    return {
+      pass,
+      message: () =>
+        `expected stream error to${isNot ? ' not' : ''} be instance of ${expected.name}. Received: ${error?.constructor?.name || error}`,
+    };
+  },
 });

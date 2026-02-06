@@ -1,18 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { html, css, createContext, Route, type Context } from "./index";
-
-// Helper to consume stream for error testing
-async function readStream(stream: ReadableStream) {
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      const { done } = await reader.read();
-      if (done) break;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
+import { describe, expect, it } from "vitest";
+import {
+  createContext,
+  css,
+  html,
+  InvalidComponentError,
+  MissingContextError,
+  Route,
+} from "./index";
 
 describe("streamweaver", () => {
   describe("html", () => {
@@ -91,10 +85,11 @@ describe("streamweaver", () => {
       function* Parent() {
         yield* html`<div><${Child} /></div>`;
       }
+
       // Expect stream to error
-      await expect(
-        readStream(new Route(Parent).renderToStream()),
-      ).rejects.toThrow("Components must be generator functions");
+      await expect(new Route(Parent).renderToStream()).toThrowCustomError(
+        InvalidComponentError,
+      );
     });
   });
 
@@ -122,8 +117,9 @@ describe("streamweaver", () => {
       }
       const route = new Route(Consumer);
 
-      await expect(readStream(route.renderToStream())).rejects.toThrow(
-        "Context not provided",
+      // @ts-expect-error
+      await expect(route.renderToStream()).toThrowCustomError(
+        MissingContextError,
       );
     });
 

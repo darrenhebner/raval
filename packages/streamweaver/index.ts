@@ -7,6 +7,20 @@ export interface Context<T> {
 const VnodeSymbol = Symbol("Vnode");
 const ContextSymbol = Symbol("Context");
 
+export class MissingContextError extends Error {
+  constructor() {
+    super("Context not provided");
+    this.name = "MissingContextError";
+  }
+}
+
+export class InvalidComponentError extends Error {
+  constructor() {
+    super("Components must be generator functions");
+    this.name = "InvalidComponentError";
+  }
+}
+
 export function createContext<T>(): Context<T> {
   const context = {
     [ContextSymbol]: true,
@@ -102,7 +116,7 @@ export const html: HtmlTag = htm.bind(function* (type, props, ...children) {
   const finalProps = { ...props, children };
   if (typeof type === "function") {
     if (type.constructor.name !== "GeneratorFunction") {
-      throw new Error("Components must be generator functions");
+      throw new InvalidComponentError();
     }
 
     yield* type(finalProps);
@@ -200,7 +214,7 @@ export class Route<Yields = never, Satisfied = never> {
             if (isContext(value)) {
               const context = contextMap.get(value);
               if (context === undefined) {
-                throw new Error("Context not provided");
+                throw new MissingContextError();
               }
 
               if (typeof context === "function") {
