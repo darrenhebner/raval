@@ -41,8 +41,8 @@ export default {
         const route = new Route(Release)
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
-        const { results } = await DB.prepare(
-          `
+            const { results } = await DB.prepare(
+              `
           SELECT
             r.mbid as release_mbid, r.title as release_title, r.type as release_type, r.artwork_url as release_artwork_url,
             a.mbid as artist_mbid, a.name as artist_name,
@@ -55,22 +55,22 @@ export default {
           LEFT JOIN publications p ON rv.publication_id = p.id
           WHERE r.mbid = ?
         `,
-        )
-          .bind(params.mbid)
-          .run();
+            )
+              .bind(params.mbid)
+              .run();
 
-        if (!results.length) {
-          throw new Error("Release not found");
-        }
+            if (!results.length) {
+              throw new Error("Release not found");
+            }
 
-        const release: any = {
-          mbid: results[0].release_mbid as string,
-          title: results[0].release_title as string,
-          type: (results[0].release_type || "album") as any,
-          artworkUrl: results[0].release_artwork_url as string | undefined,
-          artists: [],
-          reviews: [],
-        };
+            const release: any = {
+              mbid: results[0].release_mbid as string,
+              title: results[0].release_title as string,
+              type: (results[0].release_type || "album") as any,
+              artworkUrl: results[0].release_artwork_url as string | undefined,
+              artists: [],
+              reviews: [],
+            };
 
             const artistIds = new Set<string>();
             const reviewUrls = new Set<string>();

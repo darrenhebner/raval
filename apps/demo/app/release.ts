@@ -4,15 +4,63 @@ import { MusicBrainzReleaseContext } from "../shared/musicbrainz";
 import { ResetCss, ThemeCss } from "../shared/styles";
 import { ReviewsContext, ReviewItem } from "../shared/reviews";
 
-function* Details() {
+const PopoverCss = css`
+  .Popover {
+    background: rgba(0, 0, 0, 0.03);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  #PurchasePopover {
+    position-anchor: --purchase-button;
+    top: anchor(--purchase-button bottom);
+    left: anchor(--purchase-button left);
+  }
+
+  #StreamPopover {
+    position-anchor: --stream-button;
+    top: anchor(--stream-button bottom);
+    left: anchor(--stream-button left);
+  }
+`;
+
+function* Popovers() {
+  yield PopoverCss;
   const release = yield* MusicBrainzReleaseContext;
 
-  yield* html`<div class="mb-details">
-    <h3>Details from MusicBrainz</h3>
-    <dl>
-      <dt>Released</dt>
-      <dd>${release.date} (${release.country})</dd>
-    </dl>
+  const streamingLinks = release.relations.filter(
+    (relation) =>
+      relation.type === "streaming" || relation.type === "free streaming",
+  );
+
+  const purchaseLinks = release.relations.filter(
+    (relation) => relation.type === "purchase for download",
+  );
+
+  yield* html`<div>
+    <div id="PurchasePopover" class="Popover" popover="auto">
+      <ul>
+        ${purchaseLinks.map(
+          (link) =>
+            html`<li>
+              <a href="${link.url.resource}">${link.url.resource}</a>
+            </li>`,
+        )}
+      </ul>
+    </div>
+
+    <div id="StreamPopover" class="Popover" popover="auto">
+      <ul>
+        ${streamingLinks.map(
+          (link) =>
+            html`<li>
+              <a href="${link.url.resource}">${link.url.resource}</a>
+            </li>`,
+        )}
+      </ul>
+    </div>
   </div>`;
 }
 
@@ -44,6 +92,30 @@ const ReleaseCss = css`
     border-radius: 24px;
     corner-shape: squircle;
   }
+
+  .ReleaseHeaderButton {
+    background: rgba(0, 0, 0, 0.06);
+    border: none;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .ReleaseHeaderButtons {
+    padding-top: 8px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .ReleaseHeaderButtonStream {
+    anchor-name: --stream-button;
+  }
+
+  .ReleaseHeaderButtonPurchase {
+    anchor-name: --purchase-button;
+  }
 `;
 
 export function* ReleaseContent() {
@@ -58,6 +130,23 @@ export function* ReleaseContent() {
       <div>
         <h1>${title}</h1>
         <p>${artists.map((artist) => artist.name).join(", ")}</p>
+
+        <div class="ReleaseHeaderButtons">
+          <button
+            class="ReleaseHeaderButton ReleaseHeaderButtonStream"
+            commandfor="StreamPopover"
+            command="toggle-popover"
+          >
+            Stream
+          </button>
+          <button
+            class="ReleaseHeaderButton ReleaseHeaderButtonPurchase"
+            commandfor="PurchasePopover"
+            command="toggle-popover"
+          >
+            Buy
+          </button>
+        </div>
       </div>
 
       ${artworkUrl
@@ -70,6 +159,7 @@ export function* ReleaseContent() {
         : ""}
     </header>
     <${Reviews} />
+    <${Popovers} />
   </main>`;
 }
 
