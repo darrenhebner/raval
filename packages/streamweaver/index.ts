@@ -105,8 +105,7 @@ interface HtmlTag {
     strings: TemplateStringsArray,
     ...values: Values
   ): Iterable<
-    | (Values[number] extends any ? ExtractYields<Values[number]> : never)
-    | Vnode
+    (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode
   >;
 }
 
@@ -123,7 +122,13 @@ export const html: HtmlTag = htm.bind(function (type, props, ...children) {
         return;
       }
 
-      yield { type, props, children, kind: "start", [VnodeSymbol]: true } as Vnode;
+      yield {
+        type,
+        props,
+        children,
+        kind: "start",
+        [VnodeSymbol]: true,
+      } as Vnode;
 
       for (const child of children) {
         if (Array.isArray(child)) {
@@ -138,7 +143,13 @@ export const html: HtmlTag = htm.bind(function (type, props, ...children) {
         }
       }
 
-      yield { type, props, children, kind: "end", [VnodeSymbol]: true } as Vnode;
+      yield {
+        type,
+        props,
+        children,
+        kind: "end",
+        [VnodeSymbol]: true,
+      } as Vnode;
     },
   };
 }) as any;

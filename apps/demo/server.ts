@@ -7,6 +7,7 @@ import { FeedContext, FeedHandler } from "./shared/feed";
 import { EnvContext } from "./shared/env";
 import { Release } from "./app/release";
 import { ReleaseContext } from "./shared/release";
+import { ReviewsContext } from "./shared/reviews";
 import { MusicBrainzReleaseContext } from "./shared/musicbrainz";
 
 export { ReviewFetcherWorkflow } from "./workflows/ReviewFetcherWorkflow";
@@ -40,35 +41,36 @@ export default {
         const route = new Route(Release)
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
-            const { results } = await DB.prepare(
-              `
-              SELECT
-                r.mbid as release_mbid, r.title as release_title, r.type as release_type,
-                a.mbid as artist_mbid, a.name as artist_name,
-                rv.url as review_url, rv.score as review_score, rv.published_at as review_date,
-                p.name as pub_name, p.url as pub_url, p.feed_url as pub_feed_url
-              FROM releases r
-              JOIN release_artists ra ON r.mbid = ra.release_mbid
-              JOIN artists a ON ra.artist_mbid = a.mbid
-              LEFT JOIN reviews rv ON r.mbid = rv.release_mbid
-              LEFT JOIN publications p ON rv.publication_id = p.id
-              WHERE r.mbid = ?
-            `,
-            )
-              .bind(params.mbid)
-              .run();
+        const { results } = await DB.prepare(
+          `
+          SELECT
+            r.mbid as release_mbid, r.title as release_title, r.type as release_type, r.artwork_url as release_artwork_url,
+            a.mbid as artist_mbid, a.name as artist_name,
+            rv.url as review_url, rv.score as review_score, rv.published_at as review_date, rv.snippet as review_snippet,
+            p.name as pub_name, p.url as pub_url, p.feed_url as pub_feed_url
+          FROM releases r
+          JOIN release_artists ra ON r.mbid = ra.release_mbid
+          JOIN artists a ON ra.artist_mbid = a.mbid
+          LEFT JOIN reviews rv ON r.mbid = rv.release_mbid
+          LEFT JOIN publications p ON rv.publication_id = p.id
+          WHERE r.mbid = ?
+        `,
+        )
+          .bind(params.mbid)
+          .run();
 
-            if (!results.length) {
-              throw new Error("Release not found");
-            }
+        if (!results.length) {
+          throw new Error("Release not found");
+        }
 
-            const release: any = {
-              mbid: results[0].release_mbid as string,
-              title: results[0].release_title as string,
-              type: (results[0].release_type || "album") as any,
-              artists: [],
-              reviews: [],
-            };
+        const release: any = {
+          mbid: results[0].release_mbid as string,
+          title: results[0].release_title as string,
+          type: (results[0].release_type || "album") as any,
+          artworkUrl: results[0].release_artwork_url as string | undefined,
+          artists: [],
+          reviews: [],
+        };
 
             const artistIds = new Set<string>();
             const reviewUrls = new Set<string>();
@@ -90,6 +92,8 @@ export default {
                   release.reviews.push({
                     url: reviewUrl,
                     release: release,
+                    publishedAt: row.review_date as string,
+                    snippet: row.review_snippet as string,
                     publication: {
                       name: row.pub_name as string,
                       url: row.pub_url as string,
@@ -102,6 +106,10 @@ export default {
             }
 
             return release;
+          })
+          .setContext(ReviewsContext, function* () {
+            const { reviews } = yield* ReleaseContext;
+            return { reviews };
           })
           .setContext(MusicBrainzReleaseContext, async function* () {
             yield;
