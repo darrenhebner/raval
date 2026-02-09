@@ -1,4 +1,4 @@
-import { css, html } from "streamweaver";
+import { css, html } from "raval";
 import { MusicBrainzReleaseContext } from "../shared/musicbrainz";
 import { ReleaseContext } from "../shared/release";
 import { ReviewItem, ReviewsContext } from "../shared/reviews";

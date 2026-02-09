@@ -1,4 +1,4 @@
-## Streamweaver
+## Raval
 A streaming first library for building UI.
 
 ### Features
@@ -10,7 +10,7 @@ A streaming first library for building UI.
 ### Getting started
 
 ```js
-import {html, Route} from 'streamweaver';
+import {html, Route} from 'raval';
 
 // Create your components
 function* Intro({name}) {
@@ -43,7 +43,7 @@ export default {
 ### Typesafe Context
 
 ```ts
-import {createContext, html, Route} from 'streamweaver';
+import {createContext, html, Route} from 'raval';
   
 interface UserPreferences {
   colorScheme: 'dark' | 'light';
@@ -83,7 +83,7 @@ export default {
 ### Async Contexts
 
 ```ts
-import {createContext, html, Route} from 'streamweaver';
+import {createContext, html, Route} from 'raval';
 
 interface Params {
   id: string;
@@ -138,7 +138,7 @@ export default {
 ### Just in time CSS injection
 
 ```ts
-import {html, css} from 'streamweaver';
+import {html, css} from 'raval';
 
 const ListItemCss = css`
   .ListItem {

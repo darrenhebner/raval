@@ -92,9 +92,9 @@ const publications: Publication[] = [
 ];
 
 const mbApi = new MusicBrainzApi({
-  appName: "StreamWeaver",
+  appName: "Grapevine",
   appVersion: "0.0.1",
-  appContactInfo: "darren@example.com",
+  appContactInfo: "darrenwilliamhebner@gmail.com",
 });
 
 const coverArtApi = new CoverArtArchiveApi();

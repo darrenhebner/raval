@@ -1,6 +1,6 @@
 import { createRouter } from "@remix-run/fetch-router";
 import { MusicBrainzApi } from "musicbrainz-api";
-import { Route } from "streamweaver";
+import { Route } from "raval";
 import { Home } from "./app/home";
 import { Release } from "./app/release";
 import { routes } from "./app/routes";
@@ -116,9 +116,9 @@ export default {
           .setContext(MusicBrainzReleaseContext, async function* () {
             yield;
             const mbApi = new MusicBrainzApi({
-              appName: "streamweaver-demo",
+              appName: "Grapevien",
               appVersion: "0.0.1",
-              appContactInfo: "info@streamweaver.com",
+              appContactInfo: "darrenwilliamhebner@gmail.com",
             });
             const result = await mbApi.lookup("release", params.mbid, [
               "artists",

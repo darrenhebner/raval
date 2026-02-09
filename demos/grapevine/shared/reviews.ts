@@ -1,5 +1,5 @@
-import type { ComponentProps } from "streamweaver";
-import { createContext, css, html } from "streamweaver";
+import type { ComponentProps } from "raval";
+import { createContext, css, html } from "raval";
 import { formatRelativeTime } from "./date";
 import type { Review } from "./types";
 
