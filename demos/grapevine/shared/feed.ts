@@ -1,6 +1,6 @@
 import { createContext } from "streamweaver";
-import type { Feed, Review } from "./types";
 import { EnvContext } from "./env";
+import type { Feed, Review } from "./types";
 
 export const FeedContext = createContext<Feed>();
 
@@ -28,7 +28,7 @@ export async function* FeedHandler() {
     GROUP BY rv.id
     ORDER BY rv.published_at DESC
     LIMIT 50
-    `,
+    `
   ).run();
 
   const reviews: Review[] = results.map((row) => ({
@@ -48,9 +48,9 @@ export async function* FeedHandler() {
       artists: JSON.parse(row.artists as string)
         .filter((a: any) => a.mbid)
         .map((a: any) => ({
-        ...a,
-        releases: [], // Placeholder
-      })),
+          ...a,
+          releases: [], // Placeholder
+        })),
       reviews: [], // Placeholder since we are viewing from review perspective
     },
   }));

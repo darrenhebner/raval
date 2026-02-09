@@ -4,7 +4,7 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import { XMLParser } from "fast-xml-parser";
-import { MusicBrainzApi, CoverArtArchiveApi } from "musicbrainz-api";
+import { CoverArtArchiveApi, MusicBrainzApi } from "musicbrainz-api";
 import type { Publication } from "../shared/types";
 
 interface Env {
@@ -57,7 +57,7 @@ const mbApi = new MusicBrainzApi({
 const coverArtApi = new CoverArtArchiveApi();
 
 export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
-  async run(event: WorkflowEvent<any>, step: WorkflowStep) {
+  async run(_event: WorkflowEvent<any>, step: WorkflowStep) {
     console.log("Workflow Environment Check:", {
       hasAccountID: !!this.env.CLOUDFLARE_ACCOUNT_ID,
       hasToken: !!this.env.CLOUDFLARE_API_TOKEN,
@@ -67,7 +67,9 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
     const parser = new XMLParser();
 
     for (const pub of publications) {
-      if (!pub.feedUrl) continue;
+      if (!pub.feedUrl) {
+        continue;
+      }
 
       const feedItems = await step.do(`fetch-feed-${pub.name}`, async () => {
         const response = await fetch(pub.feedUrl);
@@ -99,7 +101,9 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           .replace(/[^a-zA-Z0-9]/g, "")
           .slice(-30);
 
-        if (!stepId) continue;
+        if (!stepId) {
+          continue;
+        }
 
         await step.do(`process-item-${pub.name}-${stepId}`, async () => {
           console.log(`Processing item: ${item.title} (${itemIdentifier})`);
@@ -112,7 +116,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // 4. Check if review already exists
           const existing = await this.env.DB.prepare(
-            "SELECT id FROM reviews WHERE url = ?",
+            "SELECT id FROM reviews WHERE url = ?"
           )
             .bind(itemUrl)
             .first();
@@ -158,7 +162,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
                     },
                   },
                 }),
-              },
+              }
             );
 
             if (!browserResponse.ok) {
@@ -178,7 +182,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
               releaseTitle = data.result.release_title;
               snippet = data.result.snippet;
               console.log(
-                `Extracted: Artist="${artistName}", Release="${releaseTitle}"`,
+                `Extracted: Artist="${artistName}", Release="${releaseTitle}"`
               );
             } else {
               console.error("Browser Rendering API unexpected response:", data);
@@ -189,7 +193,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             return { skipped: true, reason: "browser-rendering-fetch-error" };
           }
 
-          if (!artistName || !releaseTitle) {
+          if (!(artistName && releaseTitle)) {
             console.warn("AI missing data");
             return { skipped: true, reason: "ai-missing-data" };
           }
@@ -211,7 +215,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Search for release group or release by artist
           console.log(
-            `Searching MusicBrainz for release: "${releaseTitle}" by "${artist.name}"`,
+            `Searching MusicBrainz for release: "${releaseTitle}" by "${artist.name}"`
           );
           const releaseSearch = await mbApi.search("release-group", {
             query: `release:${releaseTitle} AND artist:${artist.name}`,
@@ -226,18 +230,18 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
             return { skipped: true, reason: "release-not-found" };
           }
           console.log(
-            `Found release group: ${releaseGroup.title} (${releaseGroup.id})`,
+            `Found release group: ${releaseGroup.title} (${releaseGroup.id})`
           );
 
           // Find Canonical Release (Earliest Official Release)
           console.log(
-            `Finding canonical release for group: ${releaseGroup.id}`,
+            `Finding canonical release for group: ${releaseGroup.id}`
           );
 
           const groupData = await mbApi.lookup(
             "release-group",
             releaseGroup.id,
-            ["releases"],
+            ["releases"]
           );
 
           if (!groupData.releases || groupData.releases.length === 0) {
@@ -245,8 +249,12 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           }
 
           groupData.releases.sort((a, b) => {
-            if (!a.date) return 1;
-            if (!b.date) return -1;
+            if (!a.date) {
+              return 1;
+            }
+            if (!b.date) {
+              return -1;
+            }
             return a.date.localeCompare(b.date);
           });
 
@@ -258,7 +266,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           }
 
           console.log(
-            `Found canonical release: ${canonicalRelease.title} (${canonicalRelease.id}) - Date: ${canonicalRelease.date}`,
+            `Found canonical release: ${canonicalRelease.title} (${canonicalRelease.id}) - Date: ${canonicalRelease.date}`
           );
 
           // Fetch Artwork
@@ -266,14 +274,14 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
           let artworkUrl: string | null = null;
           try {
             const coverInfo = await coverArtApi.getReleaseGroupCovers(
-              releaseGroup.id,
+              releaseGroup.id
             );
             const front = coverInfo.images.find((img: any) => img.front);
             if (front) {
               artworkUrl = front.image;
               console.log(`Found artwork: ${artworkUrl}`);
             }
-          } catch (e) {
+          } catch (_e) {
             console.warn(`Failed to fetch artwork for ${releaseGroup.id}`);
           }
 
@@ -285,13 +293,13 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Insert Publication (ignore if exists)
           await this.env.DB.prepare(
-            "INSERT OR IGNORE INTO publications (name, url, feed_url) VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO publications (name, url, feed_url) VALUES (?, ?, ?)"
           )
             .bind(pub.name, pub.url, pub.feedUrl)
             .run();
 
           const pubIdObj = await this.env.DB.prepare(
-            "SELECT id FROM publications WHERE url = ?",
+            "SELECT id FROM publications WHERE url = ?"
           )
             .bind(pub.url)
             .first();
@@ -299,34 +307,34 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
 
           // Insert Artist
           await this.env.DB.prepare(
-            "INSERT OR IGNORE INTO artists (mbid, name) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO artists (mbid, name) VALUES (?, ?)"
           )
             .bind(artist.id, artist.name)
             .run();
 
           // Insert Release
           await this.env.DB.prepare(
-            "INSERT OR IGNORE INTO releases (mbid, title, type, date, artwork_url) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO releases (mbid, title, type, date, artwork_url) VALUES (?, ?, ?, ?, ?)"
           )
             .bind(
               canonicalRelease.id,
               canonicalRelease.title,
               releaseGroup["primary-type"],
               canonicalRelease.date,
-              artworkUrl,
+              artworkUrl
             )
             .run();
 
           // Link Release-Artist
           await this.env.DB.prepare(
-            "INSERT OR IGNORE INTO release_artists (release_mbid, artist_mbid) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO release_artists (release_mbid, artist_mbid) VALUES (?, ?)"
           )
             .bind(canonicalRelease.id, artist.id)
             .run();
 
           // Insert Review
           await this.env.DB.prepare(
-            "INSERT INTO reviews (publication_id, release_mbid, url, title, snippet, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch())",
+            "INSERT INTO reviews (publication_id, release_mbid, url, title, snippet, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch())"
           )
             .bind(
               pubId,
@@ -334,7 +342,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
               itemUrl,
               item.title,
               snippet,
-              item.pubDate ? new Date(item.pubDate).toISOString() : null,
+              item.pubDate ? new Date(item.pubDate).toISOString() : null
             )
             .run();
 

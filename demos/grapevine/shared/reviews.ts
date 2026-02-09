@@ -1,8 +1,7 @@
-import { css, createContext, html } from "streamweaver";
 import type { ComponentProps } from "streamweaver";
-import { routes } from "../app/routes";
-import type { Review } from "./types";
+import { createContext, css, html } from "streamweaver";
 import { formatRelativeTime } from "./date";
+import type { Review } from "./types";
 
 export interface Reviews {
   reviews: Review[];
@@ -84,9 +83,11 @@ export function* ReviewItem({
         <span class="ReviewItemMeta">${formatRelativeTime(publishedAt)}</span>
       </div>
 
-      ${snippet
-        ? html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`
-        : ""}
+      ${
+        snippet
+          ? html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`
+          : ""
+      }
       ${children}
     </div>
   </li>`;

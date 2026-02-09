@@ -1,14 +1,14 @@
 import { createRouter } from "@remix-run/fetch-router";
-import { Route } from "streamweaver";
 import { MusicBrainzApi } from "musicbrainz-api";
-import { routes } from "./app/routes";
+import { Route } from "streamweaver";
 import { Home } from "./app/home";
-import { FeedContext, FeedHandler } from "./shared/feed";
-import { EnvContext } from "./shared/env";
 import { Release } from "./app/release";
+import { routes } from "./app/routes";
+import { EnvContext } from "./shared/env";
+import { FeedContext, FeedHandler } from "./shared/feed";
+import { MusicBrainzReleaseContext } from "./shared/musicbrainz";
 import { ReleaseContext } from "./shared/release";
 import { ReviewsContext } from "./shared/reviews";
-import { MusicBrainzReleaseContext } from "./shared/musicbrainz";
 
 export { ReviewFetcherWorkflow } from "./workflows/ReviewFetcherWorkflow";
 
@@ -26,7 +26,7 @@ export default {
     const router = createRouter();
 
     router.map(routes, {
-      async home() {
+      home() {
         const route = new Route(Home)
           .setContext(FeedContext, FeedHandler)
           .setContext(EnvContext, env);
@@ -37,7 +37,7 @@ export default {
           },
         });
       },
-      async release({ params }) {
+      release({ params }) {
         const route = new Route(Release)
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
@@ -54,7 +54,7 @@ export default {
           LEFT JOIN reviews rv ON r.mbid = rv.release_mbid
           LEFT JOIN publications p ON rv.publication_id = p.id
           WHERE r.mbid = ?
-        `,
+        `
             )
               .bind(params.mbid)
               .run();
@@ -91,7 +91,7 @@ export default {
                 if (!reviewUrls.has(reviewUrl)) {
                   release.reviews.push({
                     url: reviewUrl,
-                    release: release,
+                    release,
                     publishedAt: row.review_date as string,
                     snippet: row.review_snippet as string,
                     publication: {

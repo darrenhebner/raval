@@ -1,5 +1,5 @@
-import { createContext } from "streamweaver";
 import type { IRelease } from "musicbrainz-api";
+import { createContext } from "streamweaver";
 
 export type MusicBrainzRelease = IRelease;
 

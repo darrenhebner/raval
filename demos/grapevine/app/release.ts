@@ -1,8 +1,8 @@
 import { css, html } from "streamweaver";
-import { ReleaseContext } from "../shared/release";
 import { MusicBrainzReleaseContext } from "../shared/musicbrainz";
+import { ReleaseContext } from "../shared/release";
+import { ReviewItem, ReviewsContext } from "../shared/reviews";
 import { ResetCss, ThemeCss } from "../shared/styles";
-import { ReviewsContext, ReviewItem } from "../shared/reviews";
 
 const PopoverCss = css`
   .Popover {
@@ -32,11 +32,11 @@ function* Popovers() {
 
   const streamingLinks = release.relations.filter(
     (relation) =>
-      relation.type === "streaming" || relation.type === "free streaming",
+      relation.type === "streaming" || relation.type === "free streaming"
   );
 
   const purchaseLinks = release.relations.filter(
-    (relation) => relation.type === "purchase for download",
+    (relation) => relation.type === "purchase for download"
   );
 
   yield* html`<div>
@@ -46,7 +46,7 @@ function* Popovers() {
           (link) =>
             html`<li>
               <a href="${link.url.resource}">${link.url.resource}</a>
-            </li>`,
+            </li>`
         )}
       </ul>
     </div>
@@ -57,7 +57,7 @@ function* Popovers() {
           (link) =>
             html`<li>
               <a href="${link.url.resource}">${link.url.resource}</a>
-            </li>`,
+            </li>`
         )}
       </ul>
     </div>
@@ -149,14 +149,16 @@ export function* ReleaseContent() {
         </div>
       </div>
 
-      ${artworkUrl
-        ? html`<img
+      ${
+        artworkUrl
+          ? html`<img
             class="ReleaseHeaderArtwork"
             src="${artworkUrl}"
             width="100"
             height="100"
           />`
-        : ""}
+          : ""
+      }
     </header>
     <${Reviews} />
     <${Popovers} />

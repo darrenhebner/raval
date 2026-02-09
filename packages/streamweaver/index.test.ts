@@ -22,7 +22,7 @@ describe("streamweaver", () => {
         yield* html`<div>Hello</div>`;
       };
       await expect(new Route(app).renderToStream()).toRender(
-        "<div>Hello</div>",
+        "<div>Hello</div>"
       );
     });
 
@@ -31,7 +31,7 @@ describe("streamweaver", () => {
         yield* html`<div id="foo" class="bar"></div>`;
       };
       await expect(new Route(app).renderToStream()).toRender(
-        '<div id="foo" class="bar"></div>',
+        '<div id="foo" class="bar"></div>'
       );
     });
 
@@ -42,7 +42,7 @@ describe("streamweaver", () => {
         </ul>`;
       };
       await expect(new Route(app).renderToStream()).toRender(
-        "<ul><li>1</li><li>2</li></ul>",
+        "<ul><li>1</li><li>2</li></ul>"
       );
     });
 
@@ -51,7 +51,7 @@ describe("streamweaver", () => {
         yield* html`<span>${123}</span>`;
       };
       await expect(new Route(app).renderToStream()).toRender(
-        "<span>123</span>",
+        "<span>123</span>"
       );
     });
 
@@ -61,12 +61,12 @@ describe("streamweaver", () => {
       };
 
       await expect(new Route(() => app({ val: 1 })).renderToStream()).toRender(
-        "<div>1 <span>Static</span></div>",
+        "<div>1 <span>Static</span></div>"
       );
 
       // Render again with different dynamic prop, but same static structure
       await expect(new Route(() => app({ val: 2 })).renderToStream()).toRender(
-        "<div>2 <span>Static</span></div>",
+        "<div>2 <span>Static</span></div>"
       );
     });
   });
@@ -77,7 +77,7 @@ describe("streamweaver", () => {
         yield* html`<p>Simple</p>`;
       }
       await expect(new Route(MyComponent).renderToStream()).toRender(
-        "<p>Simple</p>",
+        "<p>Simple</p>"
       );
     });
 
@@ -89,7 +89,7 @@ describe("streamweaver", () => {
         yield* html`<div><${Child} name="World" /></div>`;
       }
       await expect(new Route(Parent).renderToStream()).toRender(
-        "<div><span>Hello World</span></div>",
+        "<div><span>Hello World</span></div>"
       );
     });
 
@@ -103,7 +103,7 @@ describe("streamweaver", () => {
 
       // Expect stream to error
       await expect(new Route(Parent).renderToStream()).toThrowCustomError(
-        InvalidComponentError,
+        InvalidComponentError
       );
     });
   });
@@ -121,7 +121,7 @@ describe("streamweaver", () => {
 
       const route = new Route(App).setContext(MyContext, "ctx-value");
       await expect(route.renderToStream()).toRender(
-        "<div><p>ctx-value</p></div>",
+        "<div><p>ctx-value</p></div>"
       );
     });
 
@@ -134,7 +134,7 @@ describe("streamweaver", () => {
 
       // @ts-expect-error
       await expect(route.renderToStream()).toThrowCustomError(
-        MissingContextError,
+        MissingContextError
       );
     });
 
@@ -190,7 +190,7 @@ describe("streamweaver", () => {
         .setContext(NestedContext, "nested");
 
       await expect(route.renderToStream()).toRender(
-        "<p>async-value-nested</p>",
+        "<p>async-value-nested</p>"
       );
     });
   });
@@ -207,7 +207,7 @@ describe("streamweaver", () => {
         yield* html`<div class="red">Red</div>`;
       }
       await expect(new Route(App).renderToStream()).toRender(
-        `<style>${style.content}</style><div class="red">Red</div>`,
+        `<style>${style.content}</style><div class="red">Red</div>`
       );
     });
 
@@ -226,7 +226,7 @@ describe("streamweaver", () => {
         yield* html`<${Comp} />`;
       }
       await expect(new Route(App).renderToStream()).toRender(
-        `<style>${style.content}</style><div>Comp</div>`,
+        `<style>${style.content}</style><div>Comp</div>`
       );
     });
   });

@@ -1,35 +1,38 @@
-import { expect } from 'vitest';
+import { expect } from "vitest";
 
 async function streamToString(stream: ReadableStream): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  let result = '';
-  
+  let result = "";
+
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       result += decoder.decode(value, { stream: true });
     }
     result += decoder.decode();
   } finally {
     reader.releaseLock();
   }
-  
+
   return result;
 }
 
 expect.extend({
   async toRender(received: ReadableStream, expected: string) {
     const { isNot } = this;
-    
+
     let actual: string;
     try {
       actual = await streamToString(received);
     } catch (error: any) {
       return {
         pass: false,
-        message: () => `Expected stream to render successfully, but it failed with: ${error.message}`,
+        message: () =>
+          `Expected stream to render successfully, but it failed with: ${error.message}`,
       };
     }
 
@@ -38,15 +41,18 @@ expect.extend({
     return {
       pass,
       message: () =>
-        `expected stream output to${isNot ? ' not' : ''} equal:\n` +
+        `expected stream output to${isNot ? " not" : ""} equal:\n` +
         `  ${this.utils.printExpected(expected)}\n` +
-        `Received:\n` +
+        "Received:\n" +
         `  ${this.utils.printReceived(actual)}`,
       actual,
       expected,
     };
   },
-  async toThrowCustomError(received: ReadableStream, expected: new (...args: any[]) => Error) {
+  async toThrowCustomError(
+    received: ReadableStream,
+    expected: new (...args: any[]) => Error
+  ) {
     const { isNot } = this;
     let error: any;
 
@@ -59,7 +65,8 @@ expect.extend({
     if (!error) {
       return {
         pass: false,
-        message: () => `Expected stream to throw ${expected.name}, but it rendered successfully.`,
+        message: () =>
+          `Expected stream to throw ${expected.name}, but it rendered successfully.`,
       };
     }
 
@@ -68,7 +75,7 @@ expect.extend({
     return {
       pass,
       message: () =>
-        `expected stream error to${isNot ? ' not' : ''} be instance of ${expected.name}. Received: ${error?.constructor?.name || error}`,
+        `expected stream error to${isNot ? " not" : ""} be instance of ${expected.name}. Received: ${error?.constructor?.name || error}`,
     };
   },
 });

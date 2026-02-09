@@ -57,7 +57,7 @@ export function isCss(input: unknown): input is Css {
 }
 
 export function css(strings: TemplateStringsArray, ...values: any[]): Css {
-  let content: string = "";
+  let content = "";
 
   for (let i = 0; i < strings.length; i++) {
     content += strings[i];
@@ -100,67 +100,66 @@ type ExtractYields<T> =
           ? ExtractYields<U>
           : never;
 
-interface HtmlTag {
-  <Values extends any[]>(
-    strings: TemplateStringsArray,
-    ...values: Values
-  ): Iterable<
-    (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode
-  >;
-}
+type HtmlTag = <Values extends any[]>(
+  strings: TemplateStringsArray,
+  ...values: Values
+) => Iterable<
+  (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode
+>;
 
 export type ComponentProps<Props> = Props & { children: any[] };
 
-export const html: HtmlTag = htm.bind(function (type, props, ...children) {
-  return {
-    [Symbol.iterator]: function* () {
-      const finalProps = { ...props, children };
-      if (typeof type === "function") {
-        if (type.constructor.name !== "GeneratorFunction") {
-          throw new InvalidComponentError();
-        }
-
-        yield* type(finalProps);
-        return;
+export const html: HtmlTag = htm.bind((type, props, ...children) => ({
+  *[Symbol.iterator]() {
+    const finalProps = { ...props, children };
+    if (typeof type === "function") {
+      if (type.constructor.name !== "GeneratorFunction") {
+        throw new InvalidComponentError();
       }
 
-      yield {
-        type,
-        props,
-        children,
-        kind: "start",
-        [VnodeSymbol]: true,
-      } as Vnode;
+      yield* type(finalProps);
+      return;
+    }
 
-      for (const child of children) {
-        if (Array.isArray(child)) {
-          for (const c of child) {
-            if (typeof c === "string" || typeof c === "number") yield String(c);
-            else if (c && typeof c[Symbol.iterator] === "function") yield* c;
+    yield {
+      type,
+      props,
+      children,
+      kind: "start",
+      [VnodeSymbol]: true,
+    } as Vnode;
+
+    for (const child of children) {
+      if (Array.isArray(child)) {
+        for (const c of child) {
+          if (typeof c === "string" || typeof c === "number") {
+            yield String(c);
+          } else if (c && typeof c[Symbol.iterator] === "function") {
+            yield* c;
           }
-        } else if (typeof child === "string" || typeof child === "number") {
-          yield String(child);
-        } else if (child && typeof child[Symbol.iterator] === "function") {
-          yield* child;
         }
+      } else if (typeof child === "string" || typeof child === "number") {
+        yield String(child);
+      } else if (child && typeof child[Symbol.iterator] === "function") {
+        yield* child;
       }
+    }
 
-      yield {
-        type,
-        props,
-        children,
-        kind: "end",
-        [VnodeSymbol]: true,
-      } as Vnode;
-    },
-  };
-}) as any;
+    yield {
+      type,
+      props,
+      children,
+      kind: "end",
+      [VnodeSymbol]: true,
+    } as Vnode;
+  },
+})) as any;
 
 export class Route<Yields = never, Satisfied = never> {
-  #context = new Map<unknown, unknown>();
-  #app: () => Generator<Yields, Html | void, unknown>;
+  readonly #context = new Map<unknown, unknown>();
+  readonly #app: () => Generator<Yields, Html | undefined, unknown>;
 
-  constructor(app: () => Generator<Yields, Html | void, unknown>) {
+  constructor(app: () => Generator<Yields, Html | undefined, unknown>) {
     this.#app = app;
   }
 
@@ -171,7 +170,7 @@ export class Route<Yields = never, Satisfied = never> {
           | V
           | (() => Generator<NewYields, V, unknown>)
           | (() => AsyncGenerator<NewYields, V, unknown>)
-      : never,
+      : never
   ) {
     this.#context.set(context, value);
     return this as unknown as Route<
@@ -192,7 +191,7 @@ export class Route<Yields = never, Satisfied = never> {
           const stack = [{ gen: app(), nextInput: undefined as unknown }];
 
           while (stack.length > 0) {
-            const frame = stack[stack.length - 1];
+            const frame = stack.at(-1);
             const { gen } = frame;
 
             let result = gen.next(frame.nextInput);
@@ -205,7 +204,7 @@ export class Route<Yields = never, Satisfied = never> {
               styles.add(result.value);
 
               controller.enqueue(
-                encoder.encode(`<style>${result.value.content}</style>`),
+                encoder.encode(`<style>${result.value.content}</style>`)
               );
             }
 
@@ -214,11 +213,9 @@ export class Route<Yields = never, Satisfied = never> {
               stack.pop();
 
               if (stack.length > 0) {
-                stack[stack.length - 1].nextInput = value;
-              } else {
-                if (typeof value === "string") {
-                  controller.enqueue(encoder.encode(value));
-                }
+                stack.at(-1).nextInput = value;
+              } else if (typeof value === "string") {
+                controller.enqueue(encoder.encode(value));
               }
               continue;
             }
@@ -259,7 +256,9 @@ export class Route<Yields = never, Satisfied = never> {
                 let attrs = "";
                 if (value.props) {
                   for (const [k, v] of Object.entries(value.props)) {
-                    if (k === "children") continue;
+                    if (k === "children") {
+                      continue;
+                    }
                     attrs += ` ${k}="${v}"`;
                   }
                 }

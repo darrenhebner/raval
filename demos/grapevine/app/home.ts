@@ -41,17 +41,19 @@ export function* Feed() {
                     .join(", ")}
                 </p>
               </div>
-              ${review.release.artworkUrl
-                ? html`<img
+              ${
+                review.release.artworkUrl
+                  ? html`<img
                     class="ReviewItemArtwork"
                     src="${review.release.artworkUrl}"
                     alt="${review.release.title}"
                     width="50"
                     height="50"
                   />`
-                : ""}
+                  : ""
+              }
             </a>`}<//
-          >`,
+          >`
       )}
     </ol>
   </main>`;
