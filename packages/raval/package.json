@@ -1,0 +1,42 @@
+{
+  "name": "raval",
+  "description": "Streaming HTML templates",
+  "version": "0.0.2",
+  "private": false,
+  "type": "module",
+  "keywords": [
+    "html templates",
+    "streaming",
+    "generators"
+  ],
+  "homepage": "https://github.com/darrenhebner/raval",
+  "bugs": {
+    "url": "https://github.com/darrenhebner/raval/issues"
+  },
+  "author": {
+    "name": "Darren Hebner",
+    "email": "darrenwilliamhebner@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:darrenhebner/raval.git"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "local-release": "changeset version && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.8",
+    "tsx": "^4.21.0",
+    "typescript": "catalog:",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "htm": "^3.1.1"
+  }
+}
