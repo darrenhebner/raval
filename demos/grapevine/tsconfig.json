@@ -4,5 +4,8 @@
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.cloudflare.json" }
-  ]
+  ],
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
 }
