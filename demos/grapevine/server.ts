@@ -9,8 +9,9 @@ import { FeedContext, FeedHandler } from "./shared/feed";
 import { MusicBrainzReleaseContext } from "./shared/musicbrainz";
 import { ReleaseContext } from "./shared/release";
 import { ReviewsContext } from "./shared/reviews";
+import type { Release as ReleaseType } from "./shared/types";
 
-export { ReviewFetcherWorkflow } from "./workflows/ReviewFetcherWorkflow";
+export { ReviewFetcherWorkflow } from "./workflows/review-fetcher-workflow";
 
 export default {
   async fetch(request, env: Env) {
@@ -63,10 +64,10 @@ export default {
               throw new Error("Release not found");
             }
 
-            const release: any = {
+            const release: ReleaseType = {
               mbid: results[0].release_mbid as string,
               title: results[0].release_title as string,
-              type: (results[0].release_type || "album") as any,
+              type: (results[0].release_type ?? "album") as ReleaseType["type"],
               artworkUrl: results[0].release_artwork_url as string | undefined,
               artists: [],
               reviews: [],

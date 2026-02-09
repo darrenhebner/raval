@@ -63,7 +63,6 @@ const ReviewItemCss = css`
 export function* ReviewItem({
   publication,
   snippet,
-  release,
   publishedAt,
   children,
 }: ComponentProps<Review>) {

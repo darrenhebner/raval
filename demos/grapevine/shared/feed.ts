@@ -1,6 +1,6 @@
 import { createContext } from "streamweaver";
 import { EnvContext } from "./env";
-import type { Feed, Review } from "./types";
+import type { Artist, Feed, Release, Review } from "./types";
 
 export const FeedContext = createContext<Feed>();
 
@@ -44,14 +44,14 @@ export async function* FeedHandler() {
       mbid: row.release_mbid as string,
       title: row.release_title as string,
       artworkUrl: row.release_artwork_url as string,
-      type: (row.release_type || "album") as any,
+      type: (row.release_type || "album") as Release["type"],
       artists: JSON.parse(row.artists as string)
-        .filter((a: any) => a.mbid)
-        .map((a: any) => ({
+        .filter((a: Artist) => a.mbid)
+        .map((a: Artist) => ({
           ...a,
-          releases: [], // Placeholder
+          releases: [],
         })),
-      reviews: [], // Placeholder since we are viewing from review perspective
+      reviews: [],
     },
   }));
 

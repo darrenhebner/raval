@@ -157,9 +157,9 @@ export const html: HtmlTag = htm.bind((type, props, ...children) => ({
 
 export class Route<Yields = never, Satisfied = never> {
   readonly #context = new Map<unknown, unknown>();
-  readonly #app: () => Generator<Yields, Html | undefined, unknown>;
+  readonly #app: () => Generator<Yields, void, unknown>;
 
-  constructor(app: () => Generator<Yields, Html | undefined, unknown>) {
+  constructor(app: () => Generator<Yields, void, unknown>) {
     this.#app = app;
   }
 
