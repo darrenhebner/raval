@@ -30,12 +30,12 @@ function* Popovers() {
   yield PopoverCss;
   const release = yield* MusicBrainzReleaseContext;
 
-  const streamingLinks = release.relations.filter(
+  const streamingLinks = (release.relations || []).filter(
     (relation) =>
       relation.type === "streaming" || relation.type === "free streaming"
   );
 
-  const purchaseLinks = release.relations.filter(
+  const purchaseLinks = (release.relations || []).filter(
     (relation) => relation.type === "purchase for download"
   );
 
@@ -45,7 +45,7 @@ function* Popovers() {
         ${purchaseLinks.map(
           (link) =>
             html`<li>
-              <a href="${link.url.resource}">${link.url.resource}</a>
+              <a href="${link.url?.resource}">${link.url?.resource}</a>
             </li>`
         )}
       </ul>
@@ -56,7 +56,7 @@ function* Popovers() {
         ${streamingLinks.map(
           (link) =>
             html`<li>
-              <a href="${link.url.resource}">${link.url.resource}</a>
+              <a href="${link.url?.resource}">${link.url?.resource}</a>
             </li>`
         )}
       </ul>

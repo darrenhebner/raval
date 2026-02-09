@@ -1,11 +1,8 @@
 import htm from "htm";
 
-export interface Context<T> {
-  [Symbol.iterator](): Generator<Context<T>, T, unknown>;
-}
-
-const VnodeSymbol = Symbol("Vnode");
-const ContextSymbol = Symbol("Context");
+export const ContextSymbol = Symbol("Context");
+export const VnodeSymbol = Symbol("Vnode");
+export const CssSymbol = Symbol("CSS");
 
 export class MissingContextError extends Error {
   constructor() {
@@ -21,40 +18,43 @@ export class InvalidComponentError extends Error {
   }
 }
 
-export function createContext<T>(): Context<T> {
+/**
+ * @template T
+ * @returns {import('./types.js').Context<T>}
+ */
+export function createContext() {
   const context = {
     [ContextSymbol]: true,
-    *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
-      return (yield context) as T;
+    *[Symbol.iterator]() {
+      return /** @type {T} */ (yield/** @type {any} */ (context));
     },
   };
-  return context;
+  return /** @type {any} */ (context);
 }
 
-function isContext(input: unknown): input is Context<unknown> {
+/**
+ * @param {unknown} input
+ * @returns {input is import('./types.js').Context<unknown>}
+ */
+function isContext(input) {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as Record<symbol, unknown>)[ContextSymbol] === true
+    /** @type {Record<symbol, unknown>} */ (input)[ContextSymbol] === true
   );
 }
 
-export const CssSymbol = Symbol("CSS");
-
-export interface Css {
-  content: string;
-  [CssSymbol]: true;
-}
-
-export function isCss(input: unknown): input is Css {
+/** @type {import('./types.js').IsCss} */
+export function isCss(input) {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as Record<symbol, unknown>)[CssSymbol] === true
+    /** @type {Record<symbol, unknown>} */ (input)[CssSymbol] === true
   );
 }
 
-export function css(strings: TemplateStringsArray, ...values: string[]): Css {
+/** @type {import('./types.js').CssTag} */
+export function css(strings, ...values) {
   let content = "";
 
   for (let i = 0; i < strings.length; i++) {
@@ -66,128 +66,129 @@ export function css(strings: TemplateStringsArray, ...values: string[]): Css {
     }
   }
 
-  return {
+  return /** @type {import('./types.js').Css} */ ({
     content,
     [CssSymbol]: true,
-  };
+  });
 }
 
-export interface Vnode {
-  type: string | (() => HtmlTag);
-  props: Record<string, unknown>;
-  children: Vnode[];
-  kind?: "start" | "end";
-}
-
-function isVnode(input: unknown): input is Vnode {
+/**
+ * @param {unknown} input
+ * @returns {input is import('./types.js').Vnode}
+ */
+function isVnode(input) {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as Record<symbol, unknown>)[VnodeSymbol] === true
+    /** @type {Record<symbol, unknown>} */ (input)[VnodeSymbol] === true
   );
 }
 
-type ExtractYields<T> =
-  T extends Generator<infer Y, unknown, unknown>
-    ? Y
-    : T extends (props: unknown) => Generator<infer Y, unknown, unknown>
-      ? Y
-      : T extends { [Symbol.iterator](): Generator<infer Y, unknown, unknown> }
-        ? Y
-        : T extends ReadonlyArray<infer U>
-          ? ExtractYields<U>
-          : never;
+export const html = /** @type {import('./types.js').HtmlTag} */ (
+  // @ts-expect-error
+  htm.bind(
+    /**
+     * @param {unknown} type
+     * @param {Record<string, unknown>} props
+     * @param {...unknown} children
+     */
+    (type, props, ...children) => {
+      return /** @type {Iterable<import('./types.js').Vnode | string>} */ ({
+        // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
+        *[Symbol.iterator]() {
+          const finalProps = { ...props, children };
+          if (typeof type === "function") {
+            if (type.constructor.name !== "GeneratorFunction") {
+              throw new InvalidComponentError();
+            }
 
-type HtmlTag = <Values extends unknown[]>(
-  strings: TemplateStringsArray,
-  ...values: Values
-) => Iterable<
-  | (Values[number] extends unknown ? ExtractYields<Values[number]> : never)
-  | Vnode
->;
-
-export const html = htm.bind((type, props, ...children) => ({
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
-  *[Symbol.iterator]() {
-    const finalProps = { ...props, children };
-    if (typeof type === "function") {
-      if (type.constructor.name !== "GeneratorFunction") {
-        throw new InvalidComponentError();
-      }
-
-      yield* type(finalProps);
-      return;
-    }
-
-    yield {
-      type,
-      props,
-      children,
-      kind: "start",
-      [VnodeSymbol]: true,
-    } as Vnode;
-
-    for (const child of children) {
-      if (Array.isArray(child)) {
-        for (const c of child) {
-          if (typeof c === "string" || typeof c === "number") {
-            yield String(c);
-          } else if (c && typeof c[Symbol.iterator] === "function") {
-            yield* c;
+            yield* type(finalProps);
+            return;
           }
-        }
-      } else if (typeof child === "string" || typeof child === "number") {
-        yield String(child);
-      } else if (child && typeof child[Symbol.iterator] === "function") {
-        yield* child;
-      }
+
+          yield/** @type {import('./types.js').Vnode} */ ({
+            type,
+            props,
+            children,
+            kind: "start",
+            [VnodeSymbol]: true,
+          });
+
+          for (const child of children) {
+            if (Array.isArray(child)) {
+              for (const c of child) {
+                if (typeof c === "string" || typeof c === "number") {
+                  yield String(c);
+                } else if (c && typeof c[Symbol.iterator] === "function") {
+                  yield* c;
+                }
+              }
+            } else if (typeof child === "string" || typeof child === "number") {
+              yield String(child);
+            } else if (
+              child &&
+              typeof (/** @type {any} */ (child)[Symbol.iterator]) ===
+                "function"
+            ) {
+              yield* /** @type {Iterable<unknown>} */ (child);
+            }
+          }
+
+          yield/** @type {import('./types.js').Vnode} */ ({
+            type,
+            props,
+            children,
+            kind: "end",
+            [VnodeSymbol]: true,
+          });
+        },
+      });
     }
+  )
+);
 
-    yield {
-      type,
-      props,
-      children,
-      kind: "end",
-      [VnodeSymbol]: true,
-    } as Vnode;
-  },
-})) as HtmlTag;
+/**
+ * @template [Yields=never]
+ * @template [Satisfied=never]
+ */
+export class Route {
+  /** @type {Map<unknown, unknown>} */
+  #context = new Map();
+  /** @type {() => Generator<Yields, void, unknown>} */
+  #app;
 
-export class Route<Yields = never, Satisfied = never> {
-  readonly #context = new Map<unknown, unknown>();
-  readonly #app: () => Generator<Yields, void, unknown>;
-
-  constructor(app: () => Generator<Yields, void, unknown>) {
+  /**
+   * @param {() => Generator<Yields, void, unknown>} app
+   */
+  constructor(app) {
     this.#app = app;
   }
 
-  setContext<C extends Yields, NewYields = never>(
-    context: C,
-    value: C extends Context<infer V>
-      ?
-          | V
-          | (() => Generator<NewYields, V, unknown>)
-          | (() => AsyncGenerator<NewYields, V, unknown>)
-      : never
-  ) {
+  /** @type {import('./types.js').Route<Yields, Satisfied>['setContext']} */
+  setContext(context, value) {
     this.#context.set(context, value);
-    return this as unknown as Route<
-      Exclude<Yields, C> | Exclude<NewYields, Satisfied | C>,
-      Satisfied | C
-    >;
+    return /** @type {any} */ (this);
   }
 
-  renderToStream(this: Route<Vnode | Css | undefined>) {
+  /**
+   * @this {Route<import('./types.js').Vnode | import('./types.js').Css | undefined>}
+   */
+  renderToStream() {
     const encoder = new TextEncoder();
     const app = this.#app;
     const contextMap = this.#context;
-    const styles = new Set<Css>();
+    /** @type {Set<import('./types.js').Css>} */
+    const styles = new Set();
 
     return new ReadableStream({
+      /**
+       * @param {ReadableStreamDefaultController<Uint8Array>} controller
+       */
       // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
       async start(controller) {
         try {
-          const stack = [{ gen: app(), nextInput: undefined as unknown }];
+          /** @type {{ gen: Generator<unknown, void, unknown>, nextInput: unknown }[]} */
+          const stack = [{ gen: app(), nextInput: undefined }];
 
           while (stack.length > 0) {
             const frame = stack.at(-1);
