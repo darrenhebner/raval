@@ -2,10 +2,10 @@ import "vitest";
 
 interface CustomMatchers<R = unknown> {
   toRender(expected: string): Promise<R>;
-  toThrowCustomError(expected: new (...args: any[]) => Error): Promise<R>;
+  toThrowCustomError(expected: new (...args: unknown[]) => Error): Promise<R>;
 }
 
 declare module "vitest" {
-  interface Assertion<T = any> extends CustomMatchers<T> {}
+  interface Assertion<T = unknown> extends CustomMatchers<T> {}
   interface AsymmetricMatchersContaining extends CustomMatchers {}
 }

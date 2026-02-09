@@ -11,6 +11,7 @@ import { ReleaseContext } from "./shared/release";
 import { ReviewsContext } from "./shared/reviews";
 import type { Release as ReleaseType } from "./shared/types";
 
+// biome-ignore lint/performance/noBarrelFile: Cloudflare workers require this re-export
 export { ReviewFetcherWorkflow } from "./workflows/review-fetcher-workflow";
 
 export default {

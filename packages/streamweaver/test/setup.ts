@@ -28,11 +28,13 @@ expect.extend({
     let actual: string;
     try {
       actual = await streamToString(received);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : JSON.stringify(error);
       return {
         pass: false,
         message: () =>
-          `Expected stream to render successfully, but it failed with: ${error.message}`,
+          `Expected stream to render successfully, but it failed with: ${message}`,
       };
     }
 
@@ -51,14 +53,18 @@ expect.extend({
   },
   async toThrowCustomError(
     received: ReadableStream,
-    expected: new (...args: any[]) => Error
+    expected: new (...args: unknown[]) => Error
   ) {
     const { isNot } = this;
-    let error: any;
+    let error: Error | undefined;
 
     try {
       await streamToString(received);
     } catch (e) {
+      if (!(e instanceof Error)) {
+        throw e;
+      }
+
       error = e;
     }
 
