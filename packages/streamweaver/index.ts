@@ -31,15 +31,13 @@ export function createContext<T>(): Context<T> {
   return context;
 }
 
-function isContext(input: unknown): input is Context<any> {
+function isContext(input: unknown): input is Context<unknown> {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as any)[ContextSymbol] === true
+    (input as Record<symbol, unknown>)[ContextSymbol] === true
   );
 }
-
-type Html = string & { __brand: "html" };
 
 export const CssSymbol = Symbol("CSS");
 
@@ -52,11 +50,11 @@ export function isCss(input: unknown): input is Css {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as any)[CssSymbol] === true
+    (input as Record<symbol, unknown>)[CssSymbol] === true
   );
 }
 
-export function css(strings: TemplateStringsArray, ...values: any[]): Css {
+export function css(strings: TemplateStringsArray, ...values: string[]): Css {
   let content = "";
 
   for (let i = 0; i < strings.length; i++) {
@@ -75,9 +73,9 @@ export function css(strings: TemplateStringsArray, ...values: any[]): Css {
 }
 
 export interface Vnode {
-  type: any;
-  props: Record<string, any>;
-  children: any[];
+  type: string | (() => HtmlTag);
+  props: Record<string, unknown>;
+  children: Vnode[];
   kind?: "start" | "end";
 }
 
@@ -85,31 +83,31 @@ function isVnode(input: unknown): input is Vnode {
   return (
     typeof input === "object" &&
     input !== null &&
-    (input as any)[VnodeSymbol] === true
+    (input as Record<symbol, unknown>)[VnodeSymbol] === true
   );
 }
 
 type ExtractYields<T> =
-  T extends Generator<infer Y, any, any>
+  T extends Generator<infer Y, unknown, unknown>
     ? Y
-    : T extends (props: any) => Generator<infer Y, any, any>
+    : T extends (props: unknown) => Generator<infer Y, unknown, unknown>
       ? Y
-      : T extends { [Symbol.iterator](): Generator<infer Y, any, any> }
+      : T extends { [Symbol.iterator](): Generator<infer Y, unknown, unknown> }
         ? Y
         : T extends ReadonlyArray<infer U>
           ? ExtractYields<U>
           : never;
 
-type HtmlTag = <Values extends any[]>(
+type HtmlTag = <Values extends unknown[]>(
   strings: TemplateStringsArray,
   ...values: Values
 ) => Iterable<
-  (Values[number] extends any ? ExtractYields<Values[number]> : never) | Vnode
+  | (Values[number] extends unknown ? ExtractYields<Values[number]> : never)
+  | Vnode
 >;
 
-export type ComponentProps<Props> = Props & { children: any[] };
-
-export const html: HtmlTag = htm.bind((type, props, ...children) => ({
+export const html = htm.bind((type, props, ...children) => ({
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
   *[Symbol.iterator]() {
     const finalProps = { ...props, children };
     if (typeof type === "function") {
@@ -153,7 +151,7 @@ export const html: HtmlTag = htm.bind((type, props, ...children) => ({
       [VnodeSymbol]: true,
     } as Vnode;
   },
-})) as any;
+})) as HtmlTag;
 
 export class Route<Yields = never, Satisfied = never> {
   readonly #context = new Map<unknown, unknown>();
@@ -186,12 +184,17 @@ export class Route<Yields = never, Satisfied = never> {
     const styles = new Set<Css>();
 
     return new ReadableStream({
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
       async start(controller) {
         try {
           const stack = [{ gen: app(), nextInput: undefined as unknown }];
 
           while (stack.length > 0) {
             const frame = stack.at(-1);
+            if (!frame) {
+              throw new Error("Missing frame");
+            }
+
             const { gen } = frame;
 
             let result = gen.next(frame.nextInput);
@@ -213,7 +216,13 @@ export class Route<Yields = never, Satisfied = never> {
               stack.pop();
 
               if (stack.length > 0) {
-                stack.at(-1).nextInput = value;
+                const lastStack = stack.at(-1);
+
+                if (!lastStack) {
+                  throw new Error("Missing last stack");
+                }
+
+                lastStack.nextInput = value;
               } else if (typeof value === "string") {
                 controller.enqueue(encoder.encode(value));
               }
@@ -234,13 +243,10 @@ export class Route<Yields = never, Satisfied = never> {
                   context.constructor.name === "GeneratorFunction" ||
                   context.constructor.name === "AsyncGeneratorFunction"
                 ) {
-                  const possibleGen = (context as Function)();
-                  if (
-                    possibleGen &&
-                    typeof (possibleGen as any).next === "function"
-                  ) {
+                  const possibleGen = context();
+                  if (possibleGen && typeof possibleGen.next === "function") {
                     stack.push({
-                      gen: possibleGen as any,
+                      gen: possibleGen,
                       nextInput: undefined,
                     });
                     continue;
