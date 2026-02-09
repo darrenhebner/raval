@@ -6,7 +6,6 @@ interface CustomMatchers<R = unknown> {
 }
 
 declare module "vitest" {
-  // biome-ignore lint/suspicious/noExplicitAny: Needs to match vitest config
-  interface Assertion<T = any> extends CustomMatchers<T> {}
+  interface Assertion<T = unknown> extends CustomMatchers<T> {}
   interface AsymmetricMatchersContaining extends CustomMatchers {}
 }

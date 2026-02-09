@@ -6,7 +6,7 @@ import {
   InvalidComponentError,
   MissingContextError,
   Route,
-} from "./index.js";
+} from "./index";
 
 describe("streamweaver", () => {
   describe("html", () => {
@@ -56,7 +56,7 @@ describe("streamweaver", () => {
     });
 
     it("renders static content multiple times", async () => {
-      const app = function* (props) {
+      const app = function* (props: { val: number }) {
         yield* html`<div>${props.val} <span>Static</span></div>`;
       };
 
@@ -82,7 +82,7 @@ describe("streamweaver", () => {
     });
 
     it("renders nested components", async () => {
-      function* Child({ name }) {
+      function* Child({ name }: { name: string }) {
         yield* html`<span>Hello ${name}</span>`;
       }
       function* Parent() {
@@ -110,7 +110,7 @@ describe("streamweaver", () => {
 
   describe("Context", () => {
     it("provides and consumes context", async () => {
-      const MyContext = createContext();
+      const MyContext = createContext<string>();
       function* Consumer() {
         const value = yield* MyContext;
         yield* html`<p>${value}</p>`;
@@ -126,7 +126,7 @@ describe("streamweaver", () => {
     });
 
     it("throws error when consuming missing context", async () => {
-      const MyContext = createContext();
+      const MyContext = createContext<string>();
       function* Consumer() {
         yield* MyContext;
       }
@@ -139,7 +139,7 @@ describe("streamweaver", () => {
     });
 
     it("handles context provided as a value", async () => {
-      const MyContext = createContext();
+      const MyContext = createContext<string>();
       function* Consumer() {
         const value = yield* MyContext;
         yield* html`<p>${value}</p>`;
@@ -150,8 +150,8 @@ describe("streamweaver", () => {
     });
 
     it("handles context provided as a generator", async () => {
-      const MyContext = createContext();
-      const NestedContext = createContext();
+      const MyContext = createContext<string>();
+      const NestedContext = createContext<string>();
 
       function* Consumer() {
         const value = yield* MyContext;
@@ -171,8 +171,8 @@ describe("streamweaver", () => {
     });
 
     it("handles context provided as an async generator", async () => {
-      const MyContext = createContext();
-      const NestedContext = createContext();
+      const MyContext = createContext<string>();
+      const NestedContext = createContext<string>();
 
       function* Consumer() {
         const value = yield* MyContext;

@@ -3,25 +3,11 @@
   "version": "0.0.1",
   "private": false,
   "type": "module",
-  "main": "./index.js",
-  "files": [
-    "index.js",
-    "dist"
-  ],
   "exports": {
-    ".": {
-      "types": [
-        "./dist/index.d.ts",
-        "./dist/types.d.ts"
-      ],
-      "import": "./index.js"
-    }
+    ".": "./index.ts"
   },
   "scripts": {
-    "build": "tsc --emitDeclarationOnly",
-    "prepare": "npm run build",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

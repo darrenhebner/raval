@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 
-async function streamToString(stream) {
+async function streamToString(stream: ReadableStream): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let result = "";
@@ -22,13 +22,13 @@ async function streamToString(stream) {
 }
 
 expect.extend({
-  async toRender(received, expected) {
+  async toRender(received: ReadableStream, expected: string) {
     const { isNot } = this;
 
-    let actual;
+    let actual: string;
     try {
       actual = await streamToString(received);
-    } catch (error) {
+    } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : JSON.stringify(error);
       return {
@@ -51,9 +51,12 @@ expect.extend({
       expected,
     };
   },
-  async toThrowCustomError(received, expected) {
+  async toThrowCustomError(
+    received: ReadableStream,
+    expected: new (...args: unknown[]) => Error
+  ) {
     const { isNot } = this;
-    let error;
+    let error: Error | undefined;
 
     try {
       await streamToString(received);

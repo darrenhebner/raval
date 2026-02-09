@@ -3,15 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": ".",
-    "strictNullChecks": true,
-    "allowJs": true,
-    "checkJs": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "lib": ["es2022", "dom"]
+    "strictNullChecks": true
   },
-  "include": ["index.js", "types.ts"],
-  "exclude": ["**/*.test.js", "test/**", "types.js"]
+  "include": ["**/*.ts"]
 }
