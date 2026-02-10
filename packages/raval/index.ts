@@ -1,11 +1,10 @@
 import htm from "htm";
 
-export interface Context<T> {
-  [Symbol.iterator](): Generator<Context<T>, T, unknown>;
+export class Context<T> {
+  *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
+    return (yield this) as T;
+  }
 }
-
-const VnodeSymbol = Symbol("Vnode");
-const ContextSymbol = Symbol("Context");
 
 export class MissingContextError extends Error {
   constructor() {
@@ -21,37 +20,20 @@ export class InvalidComponentError extends Error {
   }
 }
 
-export function createContext<T>(): Context<T> {
-  const context = {
-    [ContextSymbol]: true,
-    *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
-      return (yield context) as T;
-    },
-  };
-  return context;
+export function createContext<T>() {
+  return new Context<T>();
 }
 
-function isContext(input: unknown): input is Context<unknown> {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    (input as Record<symbol, unknown>)[ContextSymbol] === true
-  );
-}
+export class Css {
+  readonly #content: string;
 
-export const CssSymbol = Symbol("CSS");
+  constructor(content: string) {
+    this.#content = content;
+  }
 
-export interface Css {
-  content: string;
-  [CssSymbol]: true;
-}
-
-export function isCss(input: unknown): input is Css {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    (input as Record<symbol, unknown>)[CssSymbol] === true
-  );
+  get content() {
+    return this.#content;
+  }
 }
 
 export function css(strings: TemplateStringsArray, ...values: string[]): Css {
@@ -66,25 +48,42 @@ export function css(strings: TemplateStringsArray, ...values: string[]): Css {
     }
   }
 
-  return {
-    content,
-    [CssSymbol]: true,
-  };
+  return new Css(content);
 }
 
-export interface Vnode {
-  type: string | (() => HtmlTag);
-  props: Record<string, unknown>;
-  children: Vnode[];
-  kind?: "start" | "end";
-}
+export class Vnode {
+  readonly #type: string | (() => HtmlTag);
+  readonly #props: Record<string, unknown>;
+  readonly #children: Vnode[];
+  readonly #kind?: "start" | "end";
 
-function isVnode(input: unknown): input is Vnode {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    (input as Record<symbol, unknown>)[VnodeSymbol] === true
-  );
+  constructor(
+    type: string | (() => HtmlTag),
+    props: Record<string, unknown>,
+    children: Vnode[],
+    kind?: "start" | "end"
+  ) {
+    this.#type = type;
+    this.#props = props;
+    this.#children = children;
+    this.#kind = kind;
+  }
+
+  get type() {
+    return this.#type;
+  }
+
+  get props() {
+    return this.#props;
+  }
+
+  get children() {
+    return this.#children;
+  }
+
+  get kind() {
+    return this.#kind;
+  }
 }
 
 type ExtractYields<T> =
@@ -119,13 +118,7 @@ export const html = htm.bind((type, props, ...children) => ({
       return;
     }
 
-    yield {
-      type,
-      props,
-      children,
-      kind: "start",
-      [VnodeSymbol]: true,
-    } as Vnode;
+    yield new Vnode(type, props, children, "start");
 
     for (const child of children) {
       if (Array.isArray(child)) {
@@ -143,13 +136,7 @@ export const html = htm.bind((type, props, ...children) => ({
       }
     }
 
-    yield {
-      type,
-      props,
-      children,
-      kind: "end",
-      [VnodeSymbol]: true,
-    } as Vnode;
+    yield new Vnode(type, props, children, "end");
   },
 })) as HtmlTag;
 
@@ -203,7 +190,7 @@ export class Route<Yields = never, Satisfied = never> {
             }
 
             // Only include each style once, when it is first encountered.
-            if (isCss(result.value) && !styles.has(result.value)) {
+            if (result.value instanceof Css && !styles.has(result.value)) {
               styles.add(result.value);
 
               controller.enqueue(
@@ -232,7 +219,7 @@ export class Route<Yields = never, Satisfied = never> {
             const value = result.value;
             frame.nextInput = undefined;
 
-            if (isContext(value)) {
+            if (value instanceof Context) {
               const context = contextMap.get(value);
               if (context === undefined) {
                 throw new MissingContextError();
@@ -257,7 +244,7 @@ export class Route<Yields = never, Satisfied = never> {
               } else {
                 frame.nextInput = context;
               }
-            } else if (isVnode(value)) {
+            } else if (value instanceof Vnode) {
               if (value.kind === "start" && typeof value.type === "string") {
                 let attrs = "";
                 if (value.props) {
