@@ -1,11 +1,5 @@
 import htm from "htm";
 
-export class Context<T> {
-  *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
-    return (yield this) as T;
-  }
-}
-
 export class MissingContextError extends Error {
   constructor() {
     super("Context not provided");
@@ -17,6 +11,12 @@ export class InvalidComponentError extends Error {
   constructor() {
     super("Components must be generator functions");
     this.name = "InvalidComponentError";
+  }
+}
+
+export class Context<T> {
+  *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
+    return (yield this) as T;
   }
 }
 
@@ -87,22 +87,13 @@ export class Vnode {
 }
 
 type ExtractYields<T> =
-  T extends Generator<infer Y, unknown, unknown>
-    ? Y
-    : T extends (props: unknown) => Generator<infer Y, unknown, unknown>
-      ? Y
-      : T extends { [Symbol.iterator](): Generator<infer Y, unknown, unknown> }
-        ? Y
-        : T extends ReadonlyArray<infer U>
-          ? ExtractYields<U>
-          : never;
+  T extends Generator<infer Y, unknown, unknown> ? Y : never;
 
 type HtmlTag = <Values extends unknown[]>(
   strings: TemplateStringsArray,
   ...values: Values
 ) => Iterable<
-  | (Values[number] extends unknown ? ExtractYields<Values[number]> : never)
-  | Vnode
+  Values[number] extends unknown ? ExtractYields<Values[number]> : never
 >;
 
 export const html = htm.default.bind((type, props, ...children) => ({
