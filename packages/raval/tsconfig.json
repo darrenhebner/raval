@@ -17,7 +17,7 @@
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-    "lib": ["ES2022"]
+    "lib": ["ES2022", "WebWorker"]
   },
   "include": ["index.ts"]
 }

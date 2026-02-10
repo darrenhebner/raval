@@ -105,7 +105,7 @@ type HtmlTag = <Values extends unknown[]>(
   | Vnode
 >;
 
-export const html = htm.bind((type, props, ...children) => ({
+export const html = htm.default.bind((type, props, ...children) => ({
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
   *[Symbol.iterator]() {
     const finalProps = { ...props, children };
