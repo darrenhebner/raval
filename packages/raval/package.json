@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "watch": "tsc --watch",
     "test": "vitest run",
     "local-release": "changeset version && changeset publish"
   },

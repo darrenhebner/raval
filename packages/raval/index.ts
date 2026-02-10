@@ -1,4 +1,6 @@
-import htm from "htm";
+import _htm from "htm";
+
+const htm = _htm as unknown as typeof _htm.default;
 
 export class MissingContextError extends Error {
   constructor() {
@@ -87,7 +89,15 @@ export class Vnode {
 }
 
 type ExtractYields<T> =
-  T extends Generator<infer Y, unknown, unknown> ? Y : never;
+  T extends Generator<infer Y, unknown, unknown>
+    ? Y
+    : T extends (props: unknown) => Generator<infer Y, unknown, unknown>
+      ? Y
+      : T extends { [Symbol.iterator](): Generator<infer Y, unknown, unknown> }
+        ? Y
+        : T extends ReadonlyArray<infer U>
+          ? ExtractYields<U>
+          : never;
 
 type HtmlTag = <Values extends unknown[]>(
   strings: TemplateStringsArray,
@@ -96,7 +106,7 @@ type HtmlTag = <Values extends unknown[]>(
   Values[number] extends unknown ? ExtractYields<Values[number]> : never
 >;
 
-export const html = htm.default.bind((type, props, ...children) => ({
+export const html = htm.bind((type, props, ...children) => ({
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
   *[Symbol.iterator]() {
     const finalProps = { ...props, children };
