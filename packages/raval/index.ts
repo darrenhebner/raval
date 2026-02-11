@@ -106,10 +106,37 @@ type HtmlTag = <Values extends unknown[]>(
   Values[number] extends unknown ? ExtractYields<Values[number]> : never
 >;
 
-export const html = htm.bind((type, props, ...children) => ({
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
+type Child = string | number | Component | Component[] | string | number[];
+
+class Component {
+  readonly #type;
+  readonly #props: Record<string, any>;
+  readonly #children: Child[];
+
+  constructor(type: any, props: Record<string, any>, children: any[]) {
+    this.#type = type;
+    this.#props = props;
+    this.#children = children;
+  }
+
+  *#processChild(child: Child): Generator<any, void, unknown> {
+    if (Array.isArray(child)) {
+      for (const c of child) {
+        yield* this.#processChild(c);
+      }
+    } else if (typeof child === "string" || typeof child === "number") {
+      yield String(child);
+    } else if (child instanceof Component) {
+      yield* child;
+    }
+  }
+
   *[Symbol.iterator]() {
+    const type = this.#type;
+    const props = this.#props;
+    const children = this.#children;
     const finalProps = { ...props, children };
+
     if (typeof type === "function") {
       if (type.constructor.name !== "GeneratorFunction") {
         throw new InvalidComponentError();
@@ -122,24 +149,16 @@ export const html = htm.bind((type, props, ...children) => ({
     yield new Vnode(type, props, children, "start");
 
     for (const child of children) {
-      if (Array.isArray(child)) {
-        for (const c of child) {
-          if (typeof c === "string" || typeof c === "number") {
-            yield String(c);
-          } else if (c && typeof c[Symbol.iterator] === "function") {
-            yield* c;
-          }
-        }
-      } else if (typeof child === "string" || typeof child === "number") {
-        yield String(child);
-      } else if (child && typeof child[Symbol.iterator] === "function") {
-        yield* child;
-      }
+      yield* this.#processChild(child);
     }
 
     yield new Vnode(type, props, children, "end");
-  },
-})) as HtmlTag;
+  }
+}
+
+export const html = htm.bind(
+  (type, props, ...children) => new Component(type, props, children)
+) as HtmlTag;
 
 export class Route<Yields = never, Satisfied = never> {
   readonly #context = new Map<unknown, unknown>();
