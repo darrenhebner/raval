@@ -104,20 +104,24 @@ type HtmlTag = <Values extends unknown[]>(
   Values[number] extends unknown ? ExtractYields<Values[number]> : never
 >;
 
-type Child = string | number | Component | Component[] | string | number[];
+type Child = string | number | Component | Child[];
 
 class Component {
-  readonly #type;
-  readonly #props: Record<string, any>;
+  readonly #type: string | Generator<unknown>;
+  readonly #props: Record<string, unknown>;
   readonly #children: Child[];
 
-  constructor(type: any, props: Record<string, any>, children: any[]) {
+  constructor(
+    type: string | Generator<unknown>,
+    props: Record<string, unknown> | null,
+    children: Child[]
+  ) {
     this.#type = type;
-    this.#props = props;
+    this.#props = props ?? {};
     this.#children = children;
   }
 
-  *#processChild(child: Child): Generator<any, void, unknown> {
+  *#processChild(child: Child): Generator<unknown, void, unknown> {
     if (Array.isArray(child)) {
       for (const c of child) {
         yield* this.#processChild(c);
@@ -129,28 +133,26 @@ class Component {
     }
   }
 
-  *[Symbol.iterator]() {
+  *[Symbol.iterator](): Generator<unknown, void, unknown> {
     const type = this.#type;
     const props = this.#props;
     const children = this.#children;
     const finalProps = { ...props, children };
 
-    if (typeof type === "function") {
-      if (type.constructor.name !== "GeneratorFunction") {
-        throw new InvalidComponentError();
-      }
-
+    if (isGeneratorFunction(type)) {
       yield* type(finalProps);
       return;
     }
 
-    yield new StartTagVnode(type, props, children);
+    const tagName = type as string;
+
+    yield new StartTagVnode(tagName, props, children);
 
     for (const child of children) {
       yield* this.#processChild(child);
     }
 
-    yield new EndTagVnode(type, props, children);
+    yield new EndTagVnode(tagName, props, children);
   }
 }
 
@@ -158,13 +160,19 @@ export const html = htm.bind(
   (type, props, ...children) => new Component(type, props, children)
 ) as HtmlTag;
 
-function isGeneratorFunction(
-  input: unknown
-): input is GeneratorFunction | AsyncGeneratorFunction {
+function isGeneratorFunction(input: unknown): input is GeneratorFunction {
   return (
     typeof input === "function" &&
-    (input.constructor.name === "GeneratorFunction" ||
-      input.constructor.name === "AsyncGeneratorFunction")
+    input.constructor.name === "GeneratorFunction"
+  );
+}
+
+function isAsyncGeneratorFunction(
+  input: unknown
+): input is AsyncGeneratorFunction {
+  return (
+    typeof input === "function" &&
+    input.constructor.name === "AsyncGeneratorFunction"
   );
 }
 
@@ -213,7 +221,7 @@ class StreamRenderer {
       throw new MissingContextError();
     }
 
-    if (isGeneratorFunction(context)) {
+    if (isGeneratorFunction(context) || isAsyncGeneratorFunction(context)) {
       // It's a generator function, so we call it to get the iterator
       const possibleGen = context();
       // Recursively process this new generator
