@@ -153,7 +153,7 @@ export function* ReleaseContent() {
         artworkUrl
           ? html`<img
             class="ReleaseHeaderArtwork"
-            src="${artworkUrl}"
+            src="/image-proxy?originalUrl=${artworkUrl}"
             width="100"
             height="100"
           />`

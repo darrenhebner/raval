@@ -45,7 +45,8 @@ export function* Feed() {
                 review.release.artworkUrl
                   ? html`<img
                     class="ReviewItemArtwork"
-                    src="${review.release.artworkUrl}"
+                    src="/image-proxy?originalUrl=${review.release.artworkUrl}"
+                    loading="lazy"
                     alt="${review.release.title}"
                     width="50"
                     height="50"

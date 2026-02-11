@@ -2,6 +2,8 @@ import _htm from "htm";
 
 const htm = _htm as unknown as typeof _htm.default;
 
+export type ComponentProps<T = unknown> = T & { children?: unknown };
+
 export class MissingContextError extends Error {
   constructor() {
     super("Context not provided");
@@ -56,13 +58,13 @@ export function css(strings: TemplateStringsArray, ...values: string[]): Css {
 export class Vnode {
   readonly #type: string | (() => HtmlTag);
   readonly #props: Record<string, unknown>;
-  readonly #children: Vnode[];
+  readonly #children: unknown[];
   readonly #kind?: "start" | "end";
 
   constructor(
     type: string | (() => HtmlTag),
     props: Record<string, unknown>,
-    children: Vnode[],
+    children: unknown[],
     kind?: "start" | "end"
   ) {
     this.#type = type;

@@ -136,6 +136,45 @@ export default {
           },
         });
       },
+      async imageProxy({ request }) {
+        async function fetchWithRetry() {
+          const url = new URL(request.url);
+          const originalUrl = url.searchParams.get("originalUrl");
+          if (!originalUrl) {
+            return new Response("Missing originalUrl parameter", { status: 400 });
+          }
+
+          try {
+            const response = await fetch(originalUrl, {
+              redirect: "follow",
+            });
+
+            if (!response.ok) {
+              return new Response(`Upstream error: ${response.statusText}`, {
+                status: response.status,
+              });
+            }
+
+            const contentType = response.headers.get("content-type");
+
+            return new Response(response.body, {
+              headers: {
+                "Content-Type": contentType || "application/octet-stream",
+                "Cache-Control": "public, max-age=31536000, immutable",
+              },
+            });
+          } catch (error: unknown) {
+            console.error(error)
+            if (error !== null && typeof error === 'object' && 'retryable' in error && error.retryable === true) {
+              return fetchWithRetry()
+            }
+
+            return new Response("Error fetching image", { status: 500 });
+          }
+        }
+
+        return await fetchWithRetry()
+      }
     });
 
     return router.fetch(request.url);
