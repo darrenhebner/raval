@@ -168,6 +168,110 @@ function isGeneratorFunction(
   );
 }
 
+class StreamRenderer {
+  readonly #encoder = new TextEncoder();
+  readonly #styles = new Set<Css>();
+  readonly #controller: ReadableStreamDefaultController;
+  readonly #contextMap: Map<unknown, unknown>;
+
+  constructor(
+    controller: ReadableStreamDefaultController,
+    contextMap: Map<unknown, unknown>
+  ) {
+    this.#controller = controller;
+    this.#contextMap = contextMap;
+  }
+
+  async process(
+    gen:
+      | Generator<unknown, unknown, unknown>
+      | AsyncGenerator<unknown, unknown, unknown>,
+    input?: unknown
+  ): Promise<unknown> {
+    const result = await gen.next(input);
+
+    if (result.done) {
+      return result.value;
+    }
+
+    const value = result.value;
+    let nextInput: unknown;
+
+    if (value instanceof Context) {
+      nextInput = await this.#handleContext(value);
+    } else {
+      this.#renderValue(value);
+    }
+
+    return this.process(gen, nextInput);
+  }
+
+  async #handleContext(value: Context<unknown>): Promise<unknown> {
+    const context = this.#contextMap.get(value);
+
+    if (context === undefined) {
+      throw new MissingContextError();
+    }
+
+    if (isGeneratorFunction(context)) {
+      // It's a generator function, so we call it to get the iterator
+      const possibleGen = context();
+      // Recursively process this new generator
+      return await this.process(possibleGen);
+    }
+
+    return context;
+  }
+
+  #renderValue(value: unknown): void {
+    if (value instanceof Css) {
+      this.#renderCss(value);
+    } else if (value instanceof StartTagVnode) {
+      this.#renderStartTag(value);
+    } else if (value instanceof EndTagVnode) {
+      this.#renderEndTag(value);
+    } else if (typeof value === "string") {
+      this.#renderString(value);
+    }
+  }
+
+  #renderCss(value: Css): void {
+    if (this.#styles.has(value)) {
+      return;
+    }
+
+    this.#styles.add(value);
+    this.#enqueue(`<style>${value.content}</style>`);
+  }
+
+  #renderStartTag(value: StartTagVnode): void {
+    let attrs = "";
+
+    if (value.props) {
+      for (const [k, v] of Object.entries(value.props)) {
+        if (k === "children") {
+          continue;
+        }
+        attrs += ` ${k}="${v}"`;
+      }
+    }
+
+    this.#enqueue(`<${value.type}${attrs}>`);
+  }
+
+  #renderEndTag(value: EndTagVnode): void {
+    this.#enqueue(`</${value.type}>`);
+  }
+
+  #renderString(value: string): void {
+    this.#enqueue(value);
+  }
+
+  #enqueue(chunk: string): void {
+    this.#controller.enqueue(this.#encoder.encode(chunk));
+  }
+}
+
 export class Route<Yields = never, Satisfied = never> {
   readonly #context = new Map<unknown, unknown>();
   readonly #app: () => Generator<Yields, void, unknown>;
@@ -193,73 +297,14 @@ export class Route<Yields = never, Satisfied = never> {
   }
 
   renderToStream(this: Route<Vnode | Css | undefined>) {
-    const encoder = new TextEncoder();
     const app = this.#app;
     const contextMap = this.#context;
-    const styles = new Set<Css>();
 
     return new ReadableStream({
       async start(controller) {
         try {
-          async function processChunk(
-            gen:
-              | Generator<unknown, unknown, unknown>
-              | AsyncGenerator<unknown, unknown, unknown>,
-            input?: unknown
-          ): Promise<unknown> {
-            const result = await gen.next(input);
-
-            if (result.done) {
-              return result.value;
-            }
-
-            const value = result.value;
-
-            if (value instanceof Css) {
-              if (!styles.has(value)) {
-                styles.add(value);
-                controller.enqueue(
-                  encoder.encode(`<style>${value.content}</style>`)
-                );
-              }
-            } else if (value instanceof Context) {
-              const context = contextMap.get(value);
-
-              if (context === undefined) {
-                throw new MissingContextError();
-              }
-
-              if (isGeneratorFunction(context)) {
-                // It's a generator function, so we call it to get the iterator
-                const possibleGen = context();
-                // Recursively process this new generator
-                const nextInput = await processChunk(possibleGen);
-                return processChunk(gen, nextInput);
-              }
-
-              return processChunk(gen, context);
-            } else if (value instanceof StartTagVnode) {
-              let attrs = "";
-              if (value.props) {
-                for (const [k, v] of Object.entries(value.props)) {
-                  if (k === "children") {
-                    continue;
-                  }
-                  attrs += ` ${k}="${v}"`;
-                }
-              }
-              controller.enqueue(encoder.encode(`<${value.type}${attrs}>`));
-            } else if (value instanceof EndTagVnode) {
-              controller.enqueue(encoder.encode(`</${value.type}>`));
-            } else if (typeof value === "string") {
-              controller.enqueue(encoder.encode(value));
-            }
-
-            return processChunk(gen);
-          }
-
-          await processChunk(app());
-
+          const renderer = new StreamRenderer(controller, contextMap);
+          await renderer.process(app());
           controller.close();
         } catch (e) {
           controller.error(e);

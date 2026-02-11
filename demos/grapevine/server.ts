@@ -141,7 +141,9 @@ export default {
           const url = new URL(request.url);
           const originalUrl = url.searchParams.get("originalUrl");
           if (!originalUrl) {
-            return new Response("Missing originalUrl parameter", { status: 400 });
+            return new Response("Missing originalUrl parameter", {
+              status: 400,
+            });
           }
 
           try {
@@ -164,17 +166,22 @@ export default {
               },
             });
           } catch (error: unknown) {
-            console.error(error)
-            if (error !== null && typeof error === 'object' && 'retryable' in error && error.retryable === true) {
-              return fetchWithRetry()
+            console.error(error);
+            if (
+              error !== null &&
+              typeof error === "object" &&
+              "retryable" in error &&
+              error.retryable === true
+            ) {
+              return fetchWithRetry();
             }
 
             return new Response("Error fetching image", { status: 500 });
           }
         }
 
-        return await fetchWithRetry()
-      }
+        return await fetchWithRetry();
+      },
     });
 
     return router.fetch(request.url);
