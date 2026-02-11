@@ -55,22 +55,19 @@ export function css(strings: TemplateStringsArray, ...values: string[]): Css {
   return new Css(content);
 }
 
-export class Vnode {
-  readonly #type: string | (() => HtmlTag);
+class Vnode {
+  readonly #type: string;
   readonly #props: Record<string, unknown>;
   readonly #children: unknown[];
-  readonly #kind?: "start" | "end";
 
   constructor(
-    type: string | (() => HtmlTag),
+    type: string,
     props: Record<string, unknown>,
-    children: unknown[],
-    kind?: "start" | "end"
+    children: unknown[]
   ) {
     this.#type = type;
     this.#props = props;
     this.#children = children;
-    this.#kind = kind;
   }
 
   get type() {
@@ -84,11 +81,10 @@ export class Vnode {
   get children() {
     return this.#children;
   }
-
-  get kind() {
-    return this.#kind;
-  }
 }
+
+class StartTagVnode extends Vnode {}
+class EndTagVnode extends Vnode {}
 
 type ExtractYields<T> =
   T extends Generator<infer Y, unknown, unknown>
@@ -148,13 +144,13 @@ class Component {
       return;
     }
 
-    yield new Vnode(type, props, children, "start");
+    yield new StartTagVnode(type, props, children);
 
     for (const child of children) {
       yield* this.#processChild(child);
     }
 
-    yield new Vnode(type, props, children, "end");
+    yield new EndTagVnode(type, props, children);
   }
 }
 
@@ -242,24 +238,19 @@ export class Route<Yields = never, Satisfied = never> {
               }
 
               return processChunk(gen, context);
-            } else if (value instanceof Vnode) {
-              if (value.kind === "start" && typeof value.type === "string") {
-                let attrs = "";
-                if (value.props) {
-                  for (const [k, v] of Object.entries(value.props)) {
-                    if (k === "children") {
-                      continue;
-                    }
-                    attrs += ` ${k}="${v}"`;
+            } else if (value instanceof StartTagVnode) {
+              let attrs = "";
+              if (value.props) {
+                for (const [k, v] of Object.entries(value.props)) {
+                  if (k === "children") {
+                    continue;
                   }
+                  attrs += ` ${k}="${v}"`;
                 }
-                controller.enqueue(encoder.encode(`<${value.type}${attrs}>`));
-              } else if (
-                value.kind === "end" &&
-                typeof value.type === "string"
-              ) {
-                controller.enqueue(encoder.encode(`</${value.type}>`));
               }
+              controller.enqueue(encoder.encode(`<${value.type}${attrs}>`));
+            } else if (value instanceof EndTagVnode) {
+              controller.enqueue(encoder.encode(`</${value.type}>`));
             } else if (typeof value === "string") {
               controller.enqueue(encoder.encode(value));
             }
