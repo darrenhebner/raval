@@ -162,6 +162,16 @@ export const html = htm.bind(
   (type, props, ...children) => new Component(type, props, children)
 ) as HtmlTag;
 
+function isGeneratorFunction(
+  input: unknown
+): input is GeneratorFunction | AsyncGeneratorFunction {
+  return (
+    typeof input === "function" &&
+    (input.constructor.name === "GeneratorFunction" ||
+      input.constructor.name === "AsyncGeneratorFunction")
+  );
+}
+
 export class Route<Yields = never, Satisfied = never> {
   readonly #context = new Map<unknown, unknown>();
   readonly #app: () => Generator<Yields, void, unknown>;
@@ -193,79 +203,45 @@ export class Route<Yields = never, Satisfied = never> {
     const styles = new Set<Css>();
 
     return new ReadableStream({
-      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: We will refactor later
       async start(controller) {
         try {
-          const stack = [{ gen: app(), nextInput: undefined as unknown }];
-
-          while (stack.length > 0) {
-            const frame = stack.at(-1);
-            if (!frame) {
-              throw new Error("Missing frame");
-            }
-
-            const { gen } = frame;
-
-            let result = gen.next(frame.nextInput);
-            if (result instanceof Promise) {
-              result = await result;
-            }
-
-            // Only include each style once, when it is first encountered.
-            if (result.value instanceof Css && !styles.has(result.value)) {
-              styles.add(result.value);
-
-              controller.enqueue(
-                encoder.encode(`<style>${result.value.content}</style>`)
-              );
-            }
+          async function processChunk(
+            gen:
+              | Generator<unknown, unknown, unknown>
+              | AsyncGenerator<unknown, unknown, unknown>,
+            input?: unknown
+          ): Promise<unknown> {
+            const result = await gen.next(input);
 
             if (result.done) {
-              const value = result.value;
-              stack.pop();
-
-              if (stack.length > 0) {
-                const lastStack = stack.at(-1);
-
-                if (!lastStack) {
-                  throw new Error("Missing last stack");
-                }
-
-                lastStack.nextInput = value;
-              } else if (typeof value === "string") {
-                controller.enqueue(encoder.encode(value));
-              }
-              continue;
+              return result.value;
             }
 
             const value = result.value;
-            frame.nextInput = undefined;
 
-            if (value instanceof Context) {
+            if (value instanceof Css) {
+              if (!styles.has(value)) {
+                styles.add(value);
+                controller.enqueue(
+                  encoder.encode(`<style>${value.content}</style>`)
+                );
+              }
+            } else if (value instanceof Context) {
               const context = contextMap.get(value);
+
               if (context === undefined) {
                 throw new MissingContextError();
               }
 
-              if (typeof context === "function") {
-                if (
-                  context.constructor.name === "GeneratorFunction" ||
-                  context.constructor.name === "AsyncGeneratorFunction"
-                ) {
-                  const possibleGen = context();
-                  if (possibleGen && typeof possibleGen.next === "function") {
-                    stack.push({
-                      gen: possibleGen,
-                      nextInput: undefined,
-                    });
-                    continue;
-                  }
-                }
-                // Fallback for plain functions: treated as value
-                frame.nextInput = context;
-              } else {
-                frame.nextInput = context;
+              if (isGeneratorFunction(context)) {
+                // It's a generator function, so we call it to get the iterator
+                const possibleGen = context();
+                // Recursively process this new generator
+                const nextInput = await processChunk(possibleGen);
+                return processChunk(gen, nextInput);
               }
+
+              return processChunk(gen, context);
             } else if (value instanceof Vnode) {
               if (value.kind === "start" && typeof value.type === "string") {
                 let attrs = "";
@@ -284,14 +260,14 @@ export class Route<Yields = never, Satisfied = never> {
               ) {
                 controller.enqueue(encoder.encode(`</${value.type}>`));
               }
-              frame.nextInput = undefined;
             } else if (typeof value === "string") {
               controller.enqueue(encoder.encode(value));
-              frame.nextInput = undefined;
-            } else {
-              frame.nextInput = undefined;
             }
+
+            return processChunk(gen);
           }
+
+          await processChunk(app());
 
           controller.close();
         } catch (e) {
