@@ -2,11 +2,16 @@ import { createRouter } from "@remix-run/fetch-router";
 import { MusicBrainzApi } from "musicbrainz-api";
 import { Route } from "raval";
 import { Home } from "./app/home";
+import { PopularReleases } from "./app/popular";
 import { Release } from "./app/release";
 import { routes } from "./app/routes";
 import { EnvContext } from "./shared/env";
 import { FeedContext, FeedHandler } from "./shared/feed";
 import { MusicBrainzReleaseContext } from "./shared/musicbrainz";
+import {
+  PopularReleasesContext,
+  PopularReleasesHandler,
+} from "./shared/popular";
 import { ReleaseContext } from "./shared/release";
 import { ReviewsContext } from "./shared/reviews";
 import type { Release as ReleaseType } from "./shared/types";
@@ -31,6 +36,17 @@ export default {
       home() {
         const route = new Route(Home)
           .setContext(FeedContext, FeedHandler)
+          .setContext(EnvContext, env);
+
+        return new Response(route.renderToStream(), {
+          headers: {
+            "Content-Type": "text/html; charset=UTF-8",
+          },
+        });
+      },
+      popular() {
+        const route = new Route(PopularReleases)
+          .setContext(PopularReleasesContext, PopularReleasesHandler)
           .setContext(EnvContext, env);
 
         return new Response(route.renderToStream(), {

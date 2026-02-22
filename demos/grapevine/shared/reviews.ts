@@ -35,21 +35,6 @@ const ReviewItemCss = css`
     color: rgba(0, 0, 0, 0.5);
   }
 
-  .ReviewItemRelease {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding: 12px;
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: 12px;
-    text-decoration: none;
-    color: inherit;
-  }
-
-  .ReviewItemArtwork {
-    border-radius: 8px;
-  }
-
   .ReviewItemSnippet {
     max-width: 50ch;
     margin: 0 0 12px 0;
