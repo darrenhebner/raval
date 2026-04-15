@@ -34,7 +34,7 @@ export default {
 
     router.map(routes, {
       home() {
-        const route = new Route(Home)
+        const route = Route.boot(Home)
           .setContext(FeedContext, FeedHandler)
           .setContext(EnvContext, env);
 
@@ -45,7 +45,7 @@ export default {
         });
       },
       popular() {
-        const route = new Route(PopularReleases)
+        const route = Route.boot(PopularReleases)
           .setContext(PopularReleasesContext, PopularReleasesHandler)
           .setContext(EnvContext, env);
 
@@ -56,7 +56,7 @@ export default {
         });
       },
       release({ params }) {
-        const route = new Route(Release)
+        const route = Route.boot(Release)
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
             const { results } = await DB.prepare(
@@ -129,8 +129,7 @@ export default {
             const { reviews } = yield* ReleaseContext;
             return { reviews };
           })
-          .setContext(MusicBrainzReleaseContext, async function* () {
-            yield;
+          .setContext(MusicBrainzReleaseContext, async () => {
             const mbApi = new MusicBrainzApi({
               appName: "Grapevien",
               appVersion: "0.0.1",

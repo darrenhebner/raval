@@ -280,31 +280,39 @@ class StreamRenderer {
   }
 }
 
-export class Route<Yields = never, Satisfied = never> {
+export class Route<
+  Contexts extends Context<unknown> | never,
+  Satisfied extends Context<unknown> = never,
+> {
   readonly #context = new Map<unknown, unknown>();
-  readonly #app: () => Generator<Yields, void, unknown>;
+  readonly #app: () => Generator<unknown, void, unknown>;
 
-  constructor(app: () => Generator<Yields, void, unknown>) {
+  static boot<Yields>(app: () => Generator<Yields, void, unknown>) {
+    return new Route<Extract<Yields, Context<unknown>>>(app);
+  }
+
+  private constructor(app: () => Generator<unknown, void, unknown>) {
     this.#app = app;
   }
 
-  setContext<C extends Yields, NewYields = never>(
+  setContext<C extends Contexts, NewYields extends Context<unknown> = never>(
     context: C,
     value: C extends Context<infer V>
       ?
           | V
+          | (() => V | Promise<V>)
           | (() => Generator<NewYields, V, unknown>)
           | (() => AsyncGenerator<NewYields, V, unknown>)
       : never
   ) {
     this.#context.set(context, value);
     return this as unknown as Route<
-      Exclude<Yields, C> | Exclude<NewYields, Satisfied | C>,
+      Exclude<Contexts, C> | Exclude<NewYields, Satisfied | C>,
       Satisfied | C
     >;
   }
 
-  renderToStream(this: Route<Vnode | Css | undefined>) {
+  renderToStream(this: Route<never>) {
     const app = this.#app;
     const contextMap = this.#context;
 
