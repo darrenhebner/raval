@@ -228,6 +228,10 @@ class StreamRenderer {
       return await this.process(possibleGen);
     }
 
+    if (typeof context === "function") {
+      return await context();
+    }
+
     return context;
   }
 
