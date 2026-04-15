@@ -89,6 +89,26 @@ const publications: Publication[] = [
     url: "https://www.clashmusic.com",
     feedUrl: "https://www.clashmusic.com/reviews/feed",
   },
+  {
+    name: "SPIN",
+    url: "https://www.spin.com",
+    feedUrl: "https://www.spin.com/new-music/feed/",
+  },
+  {
+    name: "So Young Magazine",
+    url: "https://soyoungmagazine.com",
+    feedUrl: "https://soyoungmagazine.com/category/review/feed/",
+  },
+  {
+    name: "The Needle Drop",
+    url: "https://theneedledrop.com",
+    feedUrl: "https://theneedledrop.com/album-reviews/rss/",
+  },
+  {
+    name: "The Quietus",
+    url: "https://thequietus.com",
+    feedUrl: "https://thequietus.com/columns/quietus-reviews/feed/",
+  },
 ];
 
 const mbApi = new MusicBrainzApi({
@@ -231,7 +251,15 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
     )
       .bind(pub.url)
       .first();
-    const pubId = pubIdObj?.id as string | undefined;
+    const pubId = pubIdObj?.id;
+
+    if (!pubId) {
+      throw new Error(`Failed to get publication ID for ${pub.name}`);
+    }
+
+    if (!(artist.id && canonicalRelease.id)) {
+      throw new Error("Invalid artist or release ID");
+    }
 
     // Insert Artist
     await this.env.DB.prepare(
@@ -248,7 +276,7 @@ export class ReviewFetcherWorkflow extends WorkflowEntrypoint<Env> {
         canonicalRelease.id,
         canonicalRelease.title,
         releaseGroup["primary-type"],
-        canonicalRelease.date,
+        canonicalRelease.date ?? null,
         null // Will be updated after fetching artwork
       )
       .run();
