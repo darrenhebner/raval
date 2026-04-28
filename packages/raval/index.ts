@@ -311,7 +311,7 @@ export class Route<
   ) {
     this.#context.set(context, value);
     return this as unknown as Route<
-      Exclude<Contexts, C> | Exclude<NewYields, Satisfied | C>,
+      Exclude<NewYields | Contexts, Satisfied | C>,
       Satisfied | C
     >;
   }
