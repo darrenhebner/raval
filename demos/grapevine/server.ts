@@ -1,6 +1,6 @@
 import { createRouter } from "@remix-run/fetch-router";
 import { MusicBrainzApi } from "musicbrainz-api";
-import { Route } from "raval";
+import { View } from "raval";
 import { Home } from "./app/home";
 import { PopularReleases } from "./app/popular";
 import { Release } from "./app/release";
@@ -34,29 +34,29 @@ export default {
 
     router.map(routes, {
       home() {
-        const route = Route.boot(Home)
+        const view = View.prepare(Home)
           .setContext(FeedContext, FeedHandler)
           .setContext(EnvContext, env);
 
-        return new Response(route.renderToStream(), {
+        return new Response(view.renderToStream(), {
           headers: {
             "Content-Type": "text/html; charset=UTF-8",
           },
         });
       },
       popular() {
-        const route = Route.boot(PopularReleases)
+        const view = View.prepare(PopularReleases)
           .setContext(PopularReleasesContext, PopularReleasesHandler)
           .setContext(EnvContext, env);
 
-        return new Response(route.renderToStream(), {
+        return new Response(view.renderToStream(), {
           headers: {
             "Content-Type": "text/html; charset=UTF-8",
           },
         });
       },
       release({ params }) {
-        const route = Route.boot(Release)
+        const view = View.prepare(Release)
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
             const { results } = await DB.prepare(
@@ -145,7 +145,7 @@ export default {
           })
           .setContext(EnvContext, env);
 
-        return new Response(route.renderToStream(), {
+        return new Response(view.renderToStream(), {
           headers: {
             "Content-Type": "text/html; charset=UTF-8",
           },

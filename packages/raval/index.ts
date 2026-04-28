@@ -284,15 +284,15 @@ class StreamRenderer {
   }
 }
 
-export class Route<
+export class View<
   Contexts extends Context<unknown> | never,
   Satisfied extends Context<unknown> = never,
 > {
   readonly #context = new Map<unknown, unknown>();
   readonly #app: () => Generator<unknown, void, unknown>;
 
-  static boot<Yields>(app: () => Generator<Yields, void, unknown>) {
-    return new Route<Extract<Yields, Context<unknown>>>(app);
+  static prepare<Yields>(app: () => Generator<Yields, void, unknown>) {
+    return new View<Extract<Yields, Context<unknown>>>(app);
   }
 
   private constructor(app: () => Generator<unknown, void, unknown>) {
@@ -310,13 +310,13 @@ export class Route<
       : never
   ) {
     this.#context.set(context, value);
-    return this as unknown as Route<
+    return this as unknown as View<
       Exclude<NewYields | Contexts, Satisfied | C>,
       Satisfied | C
     >;
   }
 
-  renderToStream(this: Route<never>) {
+  renderToStream(this: View<never>) {
     const app = this.#app;
     const contextMap = this.#context;
 
