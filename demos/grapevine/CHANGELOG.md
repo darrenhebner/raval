@@ -1,5 +1,12 @@
 # grapevine
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies
+  - raval@0.0.7
+
 ## 0.0.8
 
 ### Patch Changes
