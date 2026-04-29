@@ -19,6 +19,7 @@ export class InvalidComponentError extends Error {
 }
 
 export class Context<T> {
+  __type = "Context" as const;
   *[Symbol.iterator](): Generator<Context<T>, T, unknown> {
     return (yield this) as T;
   }
@@ -26,6 +27,19 @@ export class Context<T> {
 
 export function createContext<T>() {
   return new Context<T>();
+}
+
+export class Violation<Name extends string> {
+  name: Name;
+  __type = "Violation" as const;
+
+  constructor(name: Name) {
+    this.name = name;
+  }
+
+  *[Symbol.iterator](): Generator<Violation<Name>, void, unknown> {
+    yield this;
+  }
 }
 
 export class Css {
@@ -181,13 +195,16 @@ class StreamRenderer {
   readonly #styles = new Set<Css>();
   readonly #controller: ReadableStreamDefaultController;
   readonly #contextMap: Map<unknown, unknown>;
+  readonly #violationHandler?: ViolationHandler<AnyViolation>;
 
   constructor(
     controller: ReadableStreamDefaultController,
-    contextMap: Map<unknown, unknown>
+    contextMap: Map<unknown, unknown>,
+    violationHandler?: ViolationHandler<AnyViolation>
   ) {
     this.#controller = controller;
     this.#contextMap = contextMap;
+    this.#violationHandler = violationHandler;
   }
 
   async process(
@@ -207,6 +224,12 @@ class StreamRenderer {
 
     if (value instanceof Context) {
       nextInput = await this.#handleContext(value);
+    } else if (value instanceof Violation) {
+      const lastChunk = this.#violationHandler?.(value);
+      if (lastChunk) {
+        this.#enqueue(lastChunk);
+      }
+      this.#controller.close();
     } else {
       this.#renderValue(value);
     }
@@ -284,22 +307,37 @@ class StreamRenderer {
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Any is necessary to open up this type
+type AnyViolation = Violation<any>;
+
+// biome-ignore lint/suspicious/noConfusingVoidType: It really does return void;
+type ViolationHandler<V = AnyViolation> = (violation: V) => string | void;
+
 export class View<
   Contexts extends Context<unknown> | never,
   Satisfied extends Context<unknown> = never,
+  Violations = AnyViolation,
 > {
   readonly #context = new Map<unknown, unknown>();
   readonly #app: () => Generator<unknown, void, unknown>;
+  #violationHandler?: ViolationHandler<Violations>;
 
   static prepare<Yields>(app: () => Generator<Yields, void, unknown>) {
-    return new View<Extract<Yields, Context<unknown>>>(app);
+    return new View<
+      Extract<Yields, Context<unknown>>,
+      never,
+      Extract<Yields, AnyViolation>
+    >(app);
   }
 
   private constructor(app: () => Generator<unknown, void, unknown>) {
     this.#app = app;
   }
 
-  setContext<C extends Contexts, NewYields extends Context<unknown> = never>(
+  setContext<
+    C extends Contexts,
+    NewYields extends Context<unknown> | AnyViolation = never,
+  >(
     context: C,
     value: C extends Context<infer V>
       ?
@@ -311,19 +349,31 @@ export class View<
   ) {
     this.#context.set(context, value);
     return this as unknown as View<
-      Exclude<NewYields | Contexts, Satisfied | C>,
-      Satisfied | C
+      Exclude<Extract<NewYields | Contexts, Context<unknown>>, Satisfied | C>,
+      Satisfied | C,
+      Extract<NewYields | Violations, AnyViolation>
     >;
   }
 
-  renderToStream(this: View<never>) {
+  handleViolation(handler: ViolationHandler<Violations>) {
+    this.#violationHandler = handler;
+    return this as unknown as View<Contexts, Satisfied, never>;
+  }
+
+  // TODO: We should only allow this to be called when all violations are handled
+  renderToStream(this: View<never, Context<unknown>, AnyViolation>) {
     const app = this.#app;
     const contextMap = this.#context;
+    const violationHandler = this.#violationHandler;
 
     return new ReadableStream({
       async start(controller) {
         try {
-          const renderer = new StreamRenderer(controller, contextMap);
+          const renderer = new StreamRenderer(
+            controller,
+            contextMap,
+            violationHandler
+          );
           await renderer.process(app());
           controller.close();
         } catch (e) {

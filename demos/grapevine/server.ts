@@ -1,6 +1,6 @@
 import { createRouter } from "@remix-run/fetch-router";
 import { MusicBrainzApi } from "musicbrainz-api";
-import { View } from "raval";
+import { View, Violation } from "raval";
 import { Home } from "./app/home";
 import { PopularReleases } from "./app/popular";
 import { Release } from "./app/release";
@@ -18,6 +18,10 @@ import type { Release as ReleaseType } from "./shared/types";
 
 // biome-ignore lint/performance/noBarrelFile: Cloudflare workers require this re-export
 export { ReviewFetcherWorkflow } from "./workflows/review-fetcher-workflow";
+
+function assertNever(value: never) {
+  throw new Error("An unexpected value reached assertNever", value);
+}
 
 export default {
   async fetch(request, env: Env) {
@@ -78,7 +82,7 @@ export default {
               .run();
 
             if (!results.length) {
-              throw new Error("Release not found");
+              yield* new Violation("MissingRelease");
             }
 
             const release: ReleaseType = {
@@ -143,7 +147,17 @@ export default {
 
             return result;
           })
-          .setContext(EnvContext, env);
+          .setContext(EnvContext, env)
+          .handleViolation((violation) => {
+            switch (violation.name) {
+              case "MissingRelease": {
+                return "</script><script>window.location = '/';</script></html>";
+              }
+              default: {
+                assertNever(violation.name);
+              }
+            }
+          });
 
         return new Response(view.renderToStream(), {
           headers: {
