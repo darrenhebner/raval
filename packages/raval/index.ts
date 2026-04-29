@@ -383,3 +383,115 @@ export class View<
     });
   }
 }
+
+type ActionDefinition<Yields, Result, Args extends unknown[]> = (
+  ...args: Args
+) => Generator<Yields, Result, unknown>;
+
+export class Action<
+  Args extends unknown[],
+  Result,
+  Contexts extends Context<unknown>,
+  Satisfied extends Context<unknown> = never,
+  Violations = AnyViolation,
+> {
+  readonly #action: ActionDefinition<unknown, Result, Args>;
+  readonly #context = new Map<unknown, unknown>();
+  #violationHandler?: ViolationHandler<Violations>;
+
+  static prepare<Yields, Result, Args extends unknown[]>(
+    action: ActionDefinition<Yields, Result, Args>
+  ) {
+    return new Action<
+      Args,
+      Result,
+      Extract<Yields, Context<unknown>>,
+      never,
+      Extract<Yields, AnyViolation>
+    >(action);
+  }
+
+  private constructor(action: ActionDefinition<unknown, Result, Args>) {
+    this.#action = action;
+  }
+
+  setContext<
+    C extends Contexts,
+    NewYields extends Context<unknown> | AnyViolation = never,
+  >(
+    context: C,
+    value: C extends Context<infer V>
+      ?
+          | V
+          | (() => V | Promise<V>)
+          | (() => Generator<NewYields, V, unknown>)
+          | (() => AsyncGenerator<NewYields, V, unknown>)
+      : never
+  ) {
+    this.#context.set(context, value);
+    return this as unknown as Action<
+      Args,
+      Result,
+      Exclude<Extract<NewYields | Contexts, Context<unknown>>, Satisfied | C>,
+      Satisfied | C,
+      Extract<NewYields | Violations, AnyViolation>
+    >;
+  }
+
+  handleViolation(handler: ViolationHandler<Violations>) {
+    this.#violationHandler = handler;
+    return this as unknown as View<Contexts, Satisfied, never>;
+  }
+
+  async #handleContext(value: Context<unknown>): Promise<unknown> {
+    const context = this.#context.get(value);
+
+    if (context === undefined) {
+      throw new MissingContextError();
+    }
+
+    if (isGeneratorFunction(context) || isAsyncGeneratorFunction(context)) {
+      // It's a generator function, so we call it to get the iterator
+      const possibleGen = context();
+      // Recursively process this new generator
+      return await this.process(possibleGen);
+    }
+
+    if (typeof context === "function") {
+      return await context();
+    }
+
+    return context;
+  }
+
+  async process(
+    gen:
+      | Generator<unknown, unknown, unknown>
+      | AsyncGenerator<unknown, unknown, unknown>,
+    input?: unknown
+  ): Promise<unknown> {
+    const result = await gen.next(input);
+
+    if (result.done) {
+      return result.value;
+    }
+
+    const value = result.value;
+
+    let nextInput: unknown;
+
+    if (value instanceof Context) {
+      nextInput = await this.#handleContext(value);
+    }
+
+    if (value instanceof Violation) {
+      return this.#violationHandler?.(value as Violations);
+    }
+
+    return this.process(gen, nextInput);
+  }
+
+  run(...args: Args) {
+    return this.process(this.#action(...args)) as Promise<Result>;
+  }
+}
