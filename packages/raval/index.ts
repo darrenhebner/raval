@@ -123,11 +123,21 @@ export class Handler<Required extends Context<unknown> = never> {
   setContext<C extends Required>(
     context: C,
     value: C extends Context<infer V> ? V | (() => Promise<V>) : never
-  ): Handler<Exclude<Required, C>> {
+  ): Handler<Exclude<Required, C>>;
+  setContext<C extends Required & Context<V>, V, NewYields>(
+    context: C,
+    provider:
+      | (() => Generator<NewYields, V, unknown>)
+      | (() => AsyncGenerator<NewYields, V, unknown>)
+  ): Handler<Exclude<Required, C> | Extract<NewYields, Context<unknown>>>;
+  setContext(
+    context: Context<unknown>,
+    value: unknown
+  ): Handler<Context<unknown>> {
     const newMap = new Map(this.#contextMap);
     newMap.set(context, value);
     return new Handler(this.#fn, newMap) as unknown as Handler<
-      Exclude<Required, C>
+      Context<unknown>
     >;
   }
 
@@ -138,6 +148,56 @@ export class Handler<Required extends Context<unknown> = never> {
   get contextMap() {
     return this.#contextMap;
   }
+}
+
+async function resolveProvided(
+  provided: unknown,
+  contextMap: Map<unknown, unknown>
+): Promise<unknown> {
+  if (typeof provided !== "function") {
+    return provided;
+  }
+  const result = (provided as () => unknown)();
+  if (result !== null && typeof result === "object") {
+    if (Symbol.asyncIterator in (result as object)) {
+      const gen = result as AsyncGenerator<unknown, unknown, unknown>;
+      let step = await gen.next();
+      while (!step.done) {
+        if (step.value instanceof Context) {
+          const resolved = await resolveContext(step.value, contextMap);
+          step = await gen.next(resolved);
+        } else {
+          step = await gen.next();
+        }
+      }
+      return step.value;
+    }
+    if (typeof (result as { next?: unknown }).next === "function") {
+      const gen = result as Generator<unknown, unknown, unknown>;
+      let step = gen.next();
+      while (!step.done) {
+        if (step.value instanceof Context) {
+          const resolved = await resolveContext(step.value, contextMap);
+          step = gen.next(resolved);
+        } else {
+          step = gen.next();
+        }
+      }
+      return step.value;
+    }
+  }
+  return await (result as Promise<unknown>);
+}
+
+function resolveContext(
+  ctx: Context<unknown>,
+  contextMap: Map<unknown, unknown>
+): Promise<unknown> {
+  const provided = contextMap.get(ctx);
+  if (provided === undefined) {
+    throw new MissingContextError();
+  }
+  return resolveProvided(provided, contextMap);
 }
 
 async function processGenerator(
@@ -153,14 +213,7 @@ async function processGenerator(
     const value = next.value;
 
     if (value instanceof Context) {
-      const provided = contextMap.get(value);
-      if (provided === undefined) {
-        throw new MissingContextError();
-      }
-      const resolved =
-        typeof provided === "function"
-          ? await (provided as () => Promise<unknown>)()
-          : provided;
+      const resolved = await resolveContext(value, contextMap);
       next = gen.next(resolved);
     } else if (value instanceof Css) {
       if (!styles.has(value)) {
