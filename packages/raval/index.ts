@@ -104,291 +104,45 @@ export function* html(
   }
 }
 
-function isGeneratorFunction(input: unknown): input is GeneratorFunction {
-  return (
-    typeof input === "function" &&
-    input.constructor.name === "GeneratorFunction"
-  );
-}
+export class Handler {
+  readonly #fn: () => Generator<string | Css>;
 
-function isAsyncGeneratorFunction(
-  input: unknown
-): input is AsyncGeneratorFunction {
-  return (
-    typeof input === "function" &&
-    input.constructor.name === "AsyncGeneratorFunction"
-  );
-}
-
-class StreamRenderer {
-  readonly #encoder = new TextEncoder();
-  readonly #styles = new Set<Css>();
-  readonly #controller: ReadableStreamDefaultController;
-  readonly #contextMap: Map<unknown, unknown>;
-  readonly #violationHandler?: ViolationHandler<AnyViolation>;
-
-  constructor(
-    controller: ReadableStreamDefaultController,
-    contextMap: Map<unknown, unknown>,
-    violationHandler?: ViolationHandler<AnyViolation>
-  ) {
-    this.#controller = controller;
-    this.#contextMap = contextMap;
-    this.#violationHandler = violationHandler;
+  static prepare(fn: () => Generator<string | Css>): Handler {
+    return new Handler(fn);
   }
 
-  async process(
-    gen:
-      | Generator<unknown, unknown, unknown>
-      | AsyncGenerator<unknown, unknown, unknown>,
-    input?: unknown
-  ): Promise<unknown> {
-    const result = await gen.next(input);
-
-    if (result.done) {
-      return result.value;
-    }
-
-    const value = result.value;
-    let nextInput: unknown;
-
-    if (value instanceof Context) {
-      nextInput = await this.#handleContext(value);
-    } else if (value instanceof Violation) {
-      const lastChunk = this.#violationHandler?.(value);
-      if (lastChunk) {
-        this.#enqueue(lastChunk);
-      }
-      this.#controller.close();
-    } else {
-      this.#renderValue(value);
-    }
-
-    return this.process(gen, nextInput);
+  private constructor(fn: () => Generator<string | Css>) {
+    this.#fn = fn;
   }
 
-  async #handleContext(value: Context<unknown>): Promise<unknown> {
-    const context = this.#contextMap.get(value);
-
-    if (context === undefined) {
-      throw new MissingContextError();
-    }
-
-    if (isGeneratorFunction(context) || isAsyncGeneratorFunction(context)) {
-      // It's a generator function, so we call it to get the iterator
-      const possibleGen = context();
-      // Recursively process this new generator
-      return await this.process(possibleGen);
-    }
-
-    if (typeof context === "function") {
-      return await context();
-    }
-
-    return context;
-  }
-
-  #renderValue(value: unknown): void {
-    if (value instanceof Css) {
-      if (!this.#styles.has(value)) {
-        this.#styles.add(value);
-        this.#enqueue(`<style>${value.content}</style>`);
-      }
-    } else if (typeof value === "string") {
-      this.#enqueue(value);
-    }
-  }
-
-  #enqueue(chunk: string): void {
-    this.#controller.enqueue(this.#encoder.encode(chunk));
+  get fn() {
+    return this.#fn;
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Any is necessary to open up this type
-type AnyViolation = Violation<any>;
+export function renderToStream(handler: Handler): ReadableStream {
+  const encoder = new TextEncoder();
+  const styles = new Set<Css>();
 
-// biome-ignore lint/suspicious/noConfusingVoidType: It really does return void;
-type ViolationHandler<V = AnyViolation> = (violation: V) => string | void;
-
-export class View<
-  Contexts extends Context<unknown> | never,
-  Satisfied extends Context<unknown> = never,
-  Violations = AnyViolation,
-> {
-  readonly #context = new Map<unknown, unknown>();
-  readonly #app: () => Generator<unknown, void, unknown>;
-  #violationHandler?: ViolationHandler<Violations>;
-
-  static prepare<Yields>(app: () => Generator<Yields, void, unknown>) {
-    return new View<
-      Extract<Yields, Context<unknown>>,
-      never,
-      Extract<Yields, AnyViolation>
-    >(app);
-  }
-
-  private constructor(app: () => Generator<unknown, void, unknown>) {
-    this.#app = app;
-  }
-
-  setContext<
-    C extends Contexts,
-    NewYields extends Context<unknown> | AnyViolation = never,
-  >(
-    context: C,
-    value: C extends Context<infer V>
-      ?
-          | V
-          | (() => V | Promise<V>)
-          | (() => Generator<NewYields, V, unknown>)
-          | (() => AsyncGenerator<NewYields, V, unknown>)
-      : never
-  ) {
-    this.#context.set(context, value);
-    return this as unknown as View<
-      Exclude<Extract<NewYields | Contexts, Context<unknown>>, Satisfied | C>,
-      Satisfied | C,
-      Extract<NewYields | Violations, AnyViolation>
-    >;
-  }
-
-  handleViolation(handler: ViolationHandler<Violations>) {
-    this.#violationHandler = handler;
-    return this as unknown as View<Contexts, Satisfied, never>;
-  }
-
-  // TODO: We should only allow this to be called when all violations are handled
-  renderToStream(this: View<never, Context<unknown>, AnyViolation>) {
-    const app = this.#app;
-    const contextMap = this.#context;
-    const violationHandler = this.#violationHandler;
-
-    return new ReadableStream({
-      async start(controller) {
-        try {
-          const renderer = new StreamRenderer(
-            controller,
-            contextMap,
-            violationHandler
-          );
-          await renderer.process(app());
-          controller.close();
-        } catch (e) {
-          controller.error(e);
+  return new ReadableStream({
+    start(controller) {
+      try {
+        for (const chunk of handler.fn()) {
+          if (chunk instanceof Css) {
+            if (!styles.has(chunk)) {
+              styles.add(chunk);
+              controller.enqueue(
+                encoder.encode(`<style>${chunk.content}</style>`)
+              );
+            }
+          } else {
+            controller.enqueue(encoder.encode(chunk));
+          }
         }
-      },
-    });
-  }
-}
-
-type ActionDefinition<Yields, Result, Args extends unknown[]> = (
-  ...args: Args
-) => Generator<Yields, Result, unknown>;
-
-export class Action<
-  Args extends unknown[],
-  Result,
-  Contexts extends Context<unknown>,
-  Satisfied extends Context<unknown> = never,
-  Violations = AnyViolation,
-> {
-  readonly #action: ActionDefinition<unknown, Result, Args>;
-  readonly #context = new Map<unknown, unknown>();
-  #violationHandler?: ViolationHandler<Violations>;
-
-  static prepare<Yields, Result, Args extends unknown[]>(
-    action: ActionDefinition<Yields, Result, Args>
-  ) {
-    return new Action<
-      Args,
-      Result,
-      Extract<Yields, Context<unknown>>,
-      never,
-      Extract<Yields, AnyViolation>
-    >(action);
-  }
-
-  private constructor(action: ActionDefinition<unknown, Result, Args>) {
-    this.#action = action;
-  }
-
-  setContext<
-    C extends Contexts,
-    NewYields extends Context<unknown> | AnyViolation = never,
-  >(
-    context: C,
-    value: C extends Context<infer V>
-      ?
-          | V
-          | (() => V | Promise<V>)
-          | (() => Generator<NewYields, V, unknown>)
-          | (() => AsyncGenerator<NewYields, V, unknown>)
-      : never
-  ) {
-    this.#context.set(context, value);
-    return this as unknown as Action<
-      Args,
-      Result,
-      Exclude<Extract<NewYields | Contexts, Context<unknown>>, Satisfied | C>,
-      Satisfied | C,
-      Extract<NewYields | Violations, AnyViolation>
-    >;
-  }
-
-  handleViolation(handler: ViolationHandler<Violations>) {
-    this.#violationHandler = handler;
-    return this as unknown as View<Contexts, Satisfied, never>;
-  }
-
-  async #handleContext(value: Context<unknown>): Promise<unknown> {
-    const context = this.#context.get(value);
-
-    if (context === undefined) {
-      throw new MissingContextError();
-    }
-
-    if (isGeneratorFunction(context) || isAsyncGeneratorFunction(context)) {
-      // It's a generator function, so we call it to get the iterator
-      const possibleGen = context();
-      // Recursively process this new generator
-      return await this.process(possibleGen);
-    }
-
-    if (typeof context === "function") {
-      return await context();
-    }
-
-    return context;
-  }
-
-  async process(
-    gen:
-      | Generator<unknown, unknown, unknown>
-      | AsyncGenerator<unknown, unknown, unknown>,
-    input?: unknown
-  ): Promise<unknown> {
-    const result = await gen.next(input);
-
-    if (result.done) {
-      return result.value;
-    }
-
-    const value = result.value;
-
-    let nextInput: unknown;
-
-    if (value instanceof Context) {
-      nextInput = await this.#handleContext(value);
-    }
-
-    if (value instanceof Violation) {
-      return this.#violationHandler?.(value as Violations);
-    }
-
-    return this.process(gen, nextInput);
-  }
-
-  run(...args: Args) {
-    return this.process(this.#action(...args)) as Promise<Result>;
-  }
+        controller.close();
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+  });
 }
