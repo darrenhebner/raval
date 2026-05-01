@@ -104,17 +104,22 @@ export function* html(
   }
 }
 
-export class Handler<Required extends Context<unknown> = never, Result = void> {
+export class Handler<
+  Required extends Context<unknown> = never,
+  Result = void,
+  Violations extends Violation<string> = never,
+> {
   readonly #fn: () => Generator<unknown, Result, unknown>;
   readonly #contextMap: Map<unknown, unknown>;
 
   static prepare<Yields, Result = void>(
     fn: () => Generator<Yields, Result, unknown>
   ) {
-    return new Handler<Extract<Yields, Context<unknown>>, Result>(
-      fn,
-      new Map()
-    );
+    return new Handler<
+      Extract<Yields, Context<unknown>>,
+      Result,
+      Extract<Yields, Violation<string>>
+    >(fn, new Map());
   }
 
   private constructor(
@@ -128,7 +133,7 @@ export class Handler<Required extends Context<unknown> = never, Result = void> {
   setContext<C extends Required>(
     context: C,
     value: C extends Context<infer V> ? V | (() => Promise<V>) : never
-  ): Handler<Exclude<Required, C>, Result>;
+  ): Handler<Exclude<Required, C>, Result, Violations>;
   setContext<C extends Required & Context<V>, V, NewYields>(
     context: C,
     provider:
@@ -136,17 +141,19 @@ export class Handler<Required extends Context<unknown> = never, Result = void> {
       | (() => AsyncGenerator<NewYields, V, unknown>)
   ): Handler<
     Exclude<Required, C> | Extract<NewYields, Context<unknown>>,
-    Result
+    Result,
+    Violations | Extract<NewYields, Violation<string>>
   >;
   setContext(
     context: Context<unknown>,
     value: unknown
-  ): Handler<Context<unknown>, Result> {
+  ): Handler<Context<unknown>, Result, Violations> {
     const newMap = new Map(this.#contextMap);
     newMap.set(context, value);
     return new Handler(this.#fn, newMap) as unknown as Handler<
       Context<unknown>,
-      Result
+      Result,
+      Violations
     >;
   }
 
@@ -159,6 +166,50 @@ export class Handler<Required extends Context<unknown> = never, Result = void> {
   }
 }
 
+// Internal signal thrown by provider generators when they yield a Violation.
+class ViolationSignal {
+  violation: Violation<string>;
+  constructor(violation: Violation<string>) {
+    this.violation = violation;
+  }
+}
+
+async function walkAsyncProvider(
+  gen: AsyncGenerator<unknown, unknown, unknown>,
+  contextMap: Map<unknown, unknown>
+): Promise<unknown> {
+  let step = await gen.next();
+  while (!step.done) {
+    if (step.value instanceof Context) {
+      const resolved = await resolveContext(step.value, contextMap);
+      step = await gen.next(resolved);
+    } else if (step.value instanceof Violation) {
+      throw new ViolationSignal(step.value);
+    } else {
+      step = await gen.next();
+    }
+  }
+  return step.value;
+}
+
+async function walkSyncProvider(
+  gen: Generator<unknown, unknown, unknown>,
+  contextMap: Map<unknown, unknown>
+): Promise<unknown> {
+  let step = gen.next();
+  while (!step.done) {
+    if (step.value instanceof Context) {
+      const resolved = await resolveContext(step.value, contextMap);
+      step = gen.next(resolved);
+    } else if (step.value instanceof Violation) {
+      throw new ViolationSignal(step.value);
+    } else {
+      step = gen.next();
+    }
+  }
+  return step.value;
+}
+
 async function resolveProvided(
   provided: unknown,
   contextMap: Map<unknown, unknown>
@@ -169,30 +220,16 @@ async function resolveProvided(
   const result = (provided as () => unknown)();
   if (result !== null && typeof result === "object") {
     if (Symbol.asyncIterator in (result as object)) {
-      const gen = result as AsyncGenerator<unknown, unknown, unknown>;
-      let step = await gen.next();
-      while (!step.done) {
-        if (step.value instanceof Context) {
-          const resolved = await resolveContext(step.value, contextMap);
-          step = await gen.next(resolved);
-        } else {
-          step = await gen.next();
-        }
-      }
-      return step.value;
+      return walkAsyncProvider(
+        result as AsyncGenerator<unknown, unknown, unknown>,
+        contextMap
+      );
     }
     if (typeof (result as { next?: unknown }).next === "function") {
-      const gen = result as Generator<unknown, unknown, unknown>;
-      let step = gen.next();
-      while (!step.done) {
-        if (step.value instanceof Context) {
-          const resolved = await resolveContext(step.value, contextMap);
-          step = gen.next(resolved);
-        } else {
-          step = gen.next();
-        }
-      }
-      return step.value;
+      return walkSyncProvider(
+        result as Generator<unknown, unknown, unknown>,
+        contextMap
+      );
     }
   }
   return await (result as Promise<unknown>);
@@ -209,44 +246,71 @@ function resolveContext(
   return resolveProvided(provided, contextMap);
 }
 
+type WalkResult<Result> =
+  | { tag: "done"; value: Result }
+  | { tag: "violation"; violation: Violation<string> };
+
 async function walkGenerator<Result>(
   gen: Generator<unknown, Result, unknown>,
   contextMap: Map<unknown, unknown>,
   onYield: (value: unknown) => void
-): Promise<Result> {
-  let next = gen.next();
-  while (!next.done) {
-    const value = next.value;
-    if (value instanceof Context) {
-      const resolved = await resolveContext(value, contextMap);
-      next = gen.next(resolved);
-    } else {
-      onYield(value);
-      next = gen.next();
+): Promise<WalkResult<Result>> {
+  try {
+    let next = gen.next();
+    while (!next.done) {
+      const value = next.value;
+      if (value instanceof Context) {
+        const resolved = await resolveContext(value, contextMap);
+        next = gen.next(resolved);
+      } else if (value instanceof Violation) {
+        return { tag: "violation", violation: value };
+      } else {
+        onYield(value);
+        next = gen.next();
+      }
     }
+    return { tag: "done", value: next.value };
+  } catch (e) {
+    if (e instanceof ViolationSignal) {
+      return { tag: "violation", violation: e.violation };
+    }
+    throw e;
   }
-  return next.value;
 }
 
-export function renderToStream(handler: Handler<never>): ReadableStream {
+export function renderToStream<V extends Violation<string>>(
+  handler: Handler<never, void, V>,
+  ...args: [V] extends [never] ? [] : [(v: V) => string | undefined]
+): ReadableStream {
   const encoder = new TextEncoder();
   const styles = new Set<Css>();
+  const [violationHandler] = args;
 
   return new ReadableStream({
     async start(controller) {
       try {
-        await walkGenerator(handler.fn(), handler.contextMap, (value) => {
-          if (value instanceof Css) {
-            if (!styles.has(value)) {
-              styles.add(value);
-              controller.enqueue(
-                encoder.encode(`<style>${value.content}</style>`)
-              );
+        const result = await walkGenerator(
+          handler.fn(),
+          handler.contextMap,
+          (value) => {
+            if (value instanceof Css) {
+              if (!styles.has(value)) {
+                styles.add(value);
+                controller.enqueue(
+                  encoder.encode(`<style>${value.content}</style>`)
+                );
+              }
+            } else if (typeof value === "string") {
+              controller.enqueue(encoder.encode(value));
             }
-          } else if (typeof value === "string") {
-            controller.enqueue(encoder.encode(value));
           }
-        });
+        );
+        if (result.tag === "violation" && violationHandler) {
+          const snippet = violationHandler(result.violation as V);
+          if (typeof snippet === "string") {
+            controller.enqueue(encoder.encode(snippet));
+          }
+        }
         controller.close();
       } catch (e) {
         controller.error(e);
@@ -255,8 +319,19 @@ export function renderToStream(handler: Handler<never>): ReadableStream {
   });
 }
 
-export function run<Result>(handler: Handler<never, Result>): Promise<Result> {
+export function run<Result, V extends Violation<string>>(
+  handler: Handler<never, Result, V>,
+  ...args: [V] extends [never] ? [] : [(v: V) => Result | undefined]
+): [V] extends [never] ? Promise<Result> : Promise<Result | undefined> {
+  const [violationHandler] = args;
   return walkGenerator(handler.fn(), handler.contextMap, () => {
     // no-op — run ignores all rendered output
-  });
+  }).then((result) => {
+    if (result.tag === "violation") {
+      return violationHandler
+        ? violationHandler(result.violation as V)
+        : undefined;
+    }
+    return result.value;
+  }) as [V] extends [never] ? Promise<Result> : Promise<Result | undefined>;
 }
