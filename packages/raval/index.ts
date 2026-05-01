@@ -1,9 +1,3 @@
-import _htm from "htm";
-
-const htm = _htm as unknown as typeof _htm.default;
-
-export type ComponentProps<T = unknown> = T & { children?: unknown };
-
 export class MissingContextError extends Error {
   constructor() {
     super("Context not provided");
@@ -69,110 +63,46 @@ export function css(strings: TemplateStringsArray, ...values: string[]): Css {
   return new Css(content);
 }
 
-class Vnode {
-  readonly #type: string;
-  readonly #props: Record<string, unknown>;
-  readonly #children: unknown[];
+type HtmlValue = string | number | Css | HtmlValue[];
 
-  constructor(
-    type: string,
-    props: Record<string, unknown>,
-    children: unknown[]
-  ) {
-    this.#type = type;
-    this.#props = props;
-    this.#children = children;
-  }
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-  get type() {
-    return this.#type;
-  }
-
-  get props() {
-    return this.#props;
-  }
-
-  get children() {
-    return this.#children;
+function* yieldValue(value: HtmlValue): Generator<string | Css> {
+  if (value instanceof Css) {
+    yield value;
+  } else if (Array.isArray(value)) {
+    for (const item of value) {
+      yield* yieldValue(item);
+    }
+  } else {
+    yield escapeHtml(String(value));
   }
 }
 
-class StartTagVnode extends Vnode {}
-class EndTagVnode extends Vnode {}
-
-type ExtractYields<T> =
-  T extends Generator<infer Y, unknown, unknown>
-    ? Y
-    : T extends (props: unknown) => Generator<infer Y, unknown, unknown>
-      ? Y
-      : T extends { [Symbol.iterator](): Generator<infer Y, unknown, unknown> }
-        ? Y
-        : T extends ReadonlyArray<infer U>
-          ? ExtractYields<U>
-          : never;
-
-type HtmlTag = <Values extends unknown[]>(
+export function* html(
   strings: TemplateStringsArray,
-  ...values: Values
-) => Iterable<
-  Values[number] extends unknown ? ExtractYields<Values[number]> : never
->;
-
-type Child = string | number | Component | Child[];
-
-class Component {
-  readonly #type: string | Generator<unknown>;
-  readonly #props: Record<string, unknown>;
-  readonly #children: Child[];
-
-  constructor(
-    type: string | Generator<unknown>,
-    props: Record<string, unknown> | null,
-    children: Child[]
-  ) {
-    this.#type = type;
-    this.#props = props ?? {};
-    this.#children = children;
-  }
-
-  *#processChild(child: Child): Generator<unknown, void, unknown> {
-    if (Array.isArray(child)) {
-      for (const c of child) {
-        yield* this.#processChild(c);
+  ...values: HtmlValue[]
+): Generator<string | Css> {
+  for (let i = 0; i < strings.length; i++) {
+    const str = strings[i];
+    if (str) {
+      yield str;
+    }
+    if (i < values.length) {
+      const val = values[i];
+      if (val !== undefined) {
+        yield* yieldValue(val);
       }
-    } else if (typeof child === "string" || typeof child === "number") {
-      yield String(child);
-    } else if (child instanceof Component) {
-      yield* child;
     }
-  }
-
-  *[Symbol.iterator](): Generator<unknown, void, unknown> {
-    const type = this.#type;
-    const props = this.#props;
-    const children = this.#children;
-    const finalProps = { ...props, children };
-
-    if (isGeneratorFunction(type)) {
-      yield* type(finalProps);
-      return;
-    }
-
-    const tagName = type as string;
-
-    yield new StartTagVnode(tagName, props, children);
-
-    for (const child of children) {
-      yield* this.#processChild(child);
-    }
-
-    yield new EndTagVnode(tagName, props, children);
   }
 }
-
-export const html = htm.bind(
-  (type, props, ...children) => new Component(type, props, children)
-) as HtmlTag;
 
 function isGeneratorFunction(input: unknown): input is GeneratorFunction {
   return (
@@ -260,46 +190,13 @@ class StreamRenderer {
 
   #renderValue(value: unknown): void {
     if (value instanceof Css) {
-      this.#renderCss(value);
-    } else if (value instanceof StartTagVnode) {
-      this.#renderStartTag(value);
-    } else if (value instanceof EndTagVnode) {
-      this.#renderEndTag(value);
-    } else if (typeof value === "string") {
-      this.#renderString(value);
-    }
-  }
-
-  #renderCss(value: Css): void {
-    if (this.#styles.has(value)) {
-      return;
-    }
-
-    this.#styles.add(value);
-    this.#enqueue(`<style>${value.content}</style>`);
-  }
-
-  #renderStartTag(value: StartTagVnode): void {
-    let attrs = "";
-
-    if (value.props) {
-      for (const [k, v] of Object.entries(value.props)) {
-        if (k === "children") {
-          continue;
-        }
-        attrs += ` ${k}="${v}"`;
+      if (!this.#styles.has(value)) {
+        this.#styles.add(value);
+        this.#enqueue(`<style>${value.content}</style>`);
       }
+    } else if (typeof value === "string") {
+      this.#enqueue(value);
     }
-
-    this.#enqueue(`<${value.type}${attrs}>`);
-  }
-
-  #renderEndTag(value: EndTagVnode): void {
-    this.#enqueue(`</${value.type}>`);
-  }
-
-  #renderString(value: string): void {
-    this.#enqueue(value);
   }
 
   #enqueue(chunk: string): void {
