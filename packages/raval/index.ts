@@ -104,41 +104,93 @@ export function* html(
   }
 }
 
-export class Handler {
-  readonly #fn: () => Generator<string | Css>;
+export class Handler<Required extends Context<unknown> = never> {
+  readonly #fn: () => Generator<unknown, void, unknown>;
+  readonly #contextMap: Map<unknown, unknown>;
 
-  static prepare(fn: () => Generator<string | Css>): Handler {
-    return new Handler(fn);
+  static prepare<Yields>(fn: () => Generator<Yields, void, unknown>) {
+    return new Handler<Extract<Yields, Context<unknown>>>(fn, new Map());
   }
 
-  private constructor(fn: () => Generator<string | Css>) {
+  private constructor(
+    fn: () => Generator<unknown, void, unknown>,
+    contextMap: Map<unknown, unknown>
+  ) {
     this.#fn = fn;
+    this.#contextMap = contextMap;
+  }
+
+  setContext<C extends Required>(
+    context: C,
+    value: C extends Context<infer V> ? V | (() => Promise<V>) : never
+  ): Handler<Exclude<Required, C>> {
+    const newMap = new Map(this.#contextMap);
+    newMap.set(context, value);
+    return new Handler(this.#fn, newMap) as unknown as Handler<
+      Exclude<Required, C>
+    >;
   }
 
   get fn() {
     return this.#fn;
   }
+
+  get contextMap() {
+    return this.#contextMap;
+  }
 }
 
-export function renderToStream(handler: Handler): ReadableStream {
+async function processGenerator(
+  gen: Generator<unknown, void, unknown>,
+  contextMap: Map<unknown, unknown>,
+  styles: Set<Css>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+): Promise<void> {
+  let next = gen.next();
+
+  while (!next.done) {
+    const value = next.value;
+
+    if (value instanceof Context) {
+      const provided = contextMap.get(value);
+      if (provided === undefined) {
+        throw new MissingContextError();
+      }
+      const resolved =
+        typeof provided === "function"
+          ? await (provided as () => Promise<unknown>)()
+          : provided;
+      next = gen.next(resolved);
+    } else if (value instanceof Css) {
+      if (!styles.has(value)) {
+        styles.add(value);
+        controller.enqueue(encoder.encode(`<style>${value.content}</style>`));
+      }
+      next = gen.next();
+    } else if (typeof value === "string") {
+      controller.enqueue(encoder.encode(value));
+      next = gen.next();
+    } else {
+      next = gen.next();
+    }
+  }
+}
+
+export function renderToStream(handler: Handler<never>): ReadableStream {
   const encoder = new TextEncoder();
   const styles = new Set<Css>();
 
   return new ReadableStream({
-    start(controller) {
+    async start(controller) {
       try {
-        for (const chunk of handler.fn()) {
-          if (chunk instanceof Css) {
-            if (!styles.has(chunk)) {
-              styles.add(chunk);
-              controller.enqueue(
-                encoder.encode(`<style>${chunk.content}</style>`)
-              );
-            }
-          } else {
-            controller.enqueue(encoder.encode(chunk));
-          }
-        }
+        await processGenerator(
+          handler.fn(),
+          handler.contextMap,
+          styles,
+          controller,
+          encoder
+        );
         controller.close();
       } catch (e) {
         controller.error(e);
