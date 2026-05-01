@@ -1,176 +1,220 @@
 ## Raval
-A streaming first library for building UI.
+
+A streaming-first library for building server-rendered UI with type-safe context injection.
 
 ### Features
+
 - Stream HTML as you render
 - Render from the server or service workers
-- Typesafe context
-- Just in time CSS injection
+- Type-safe context — missing dependencies are compile-time errors
+- Just-in-time CSS injection with automatic deduplication
+- Compose components via `yield*`
+
+---
 
 ### Getting started
 
-```js
-import {html, Route} from 'raval';
+```ts
+import { Handler, html, renderToStream } from 'raval';
 
-// Create your components
-function* Intro({name}) {
-  yield* html`<h1>Hello, ${name}!</h1>`
+function* Greeting(name: string) {
+  yield* html`<h1>Hello, ${name}!</h1>`;
 }
 
 function* App() {
-  yield* html`<main>
-    <heading>
-      <${Intro} name="World" />
-    </heading>
-  </main>`;
+  yield* html`<main>`;
+  yield* Greeting("World");
+  yield* html`</main>`;
 }
 
-// Boot the app
-const route = new Route(App);
+const handler = Handler.prepare(App);
 
 export default {
   fetch() {
-    // Render the app to a stream and return your response
-    return new Response(route.renderToStream(), {
-      headers: {
-        'Content-Type': 'text/html; charset=UTF-8'
-      }
-    })
-  }
-}
-````
-
-### Typesafe Context
-
-```ts
-import {createContext, html, Route} from 'raval';
-  
-interface UserPreferences {
-  colorScheme: 'dark' | 'light';
-}
-
-// Context objects define the interface
-const UserPreferencesContext = createContext<UserPreferences>();
-
-function* Logo() {
-  // Components at any level of the tree can access context
-  const {colorScheme} = yield* UserPreferencesContext;
-  
-  if (colorScheme === 'dark') {
-    yield* html`<img src="/dark-mode-logo.png" />`;
-  } else {
-    yield* html`<img src="/light-mode-logo.png` />`;
-  }
-}
-
-export default {
-  fetch(request) {
-    // All contexts that are consumed within our app bubble up via TypeScript.
-    const route = new Route(Logo).setContext(UserPreferencesContext, {
-      colorScheme: request.headers.get("sec-ch-prefers-color-scheme") ?? 'light';
-    })
-    
-    // renderToStream cannot be called until all required contexts have an implementation
-    return new Response(route.renderToStream(), {
-      headers: {
-        'Content-Type': 'text/html; charset=UTF-8'
-      }
-    })
+    return new Response(renderToStream(handler), {
+      headers: { 'Content-Type': 'text/html; charset=UTF-8' }
+    });
   }
 }
 ```
 
-### Async Contexts
+Components are plain generator functions composed via `yield*` — no JSX, no virtual DOM.
+
+---
+
+### Type-safe context
+
+Context is declared once and consumed anywhere in the tree. TypeScript tracks which contexts are unsatisfied and prevents calling `renderToStream` until all are provided.
 
 ```ts
-import {createContext, html, Route} from 'raval';
+import { createContext, Handler, html, renderToStream } from 'raval';
 
-interface Params {
-  id: string;
+interface User { name: string; role: string; }
+
+const UserCtx = createContext<User>();
+
+function* Profile() {
+  const user = yield* UserCtx;
+  yield* html`<p>${user.name} — ${user.role}</p>`;
 }
 
-interface Data {
-  name: string;
-}
-
-const ParamsContext = createContext<Params>();
-const DataContext = createContext<Data>();
-
-function* Greeting() {  
-  const {name} = yield* DataContext; 
-  yield* html`<h1>Hello, ${name}</h1>`
-}
-
-// HTML is eagerly streamed as soon as renderToStream is called.
-// When a component with an async dependency is encountered,
-// the stream pauses and waits for the context to resolve before continuing.
-// In this example, the logo would be displayed while Greeting waits for the async DataContext.
 function* App() {
-  yield* html`
-    <main>
-      <img src="logo.png" />
-      <${Greeting} />  
-    </main>
-  `
+  yield* Profile();
 }
 
 export default {
-  fetch(request) {
-    const route = new Route(App).setContext(DataContext, async function*() {
-      // Contexts can be consumed by other contexts
-      const {id} = yield* ParamsContext;
-      const data = await fetchData(id);
-      return data;
-    })
-    .setContext(ParamsContext, {
-      id: new URL(request.url).searchParams.get('id')
-    })
-    
-    return new Response(route.renderToStream(), {
-      headers: {
-        'Content-Type': 'text/html; charset=UTF-8'
-      }
-    })
+  fetch(request: Request) {
+    const handler = Handler.prepare(App)
+      .setContext(UserCtx, { name: 'Alice', role: 'admin' });
+
+    // TypeScript error here if any required context is missing
+    return new Response(renderToStream(handler), {
+      headers: { 'Content-Type': 'text/html; charset=UTF-8' }
+    });
   }
 }
 ```
 
-### Just in time CSS injection
+---
+
+### Async context providers
+
+Contexts can be resolved asynchronously. The stream pauses at each context yield and resumes once the value is available.
 
 ```ts
-import {html, css} from 'raval';
+import { createContext, Handler, html, renderToStream } from 'raval';
 
-const ListItemCss = css`
-  .ListItem {
-    margin: 4px;
-    color: blue;
-  }
-`
+const SessionCtx = createContext<{ userId: string }>();
+const ProfileCtx = createContext<{ name: string }>();
 
-function* ListItem({content}) {
-  yield ListItemCss; 
-  yield* html`<li class="ListItem">${content}</li>`
+function* Page() {
+  const profile = yield* ProfileCtx;
+  yield* html`<h1>Welcome, ${profile.name}</h1>`;
 }
 
-function* List({items}) {
-  yield* html`<ul>${items.map(item => html`<${ListItem} content="${item}"/>`)}</ul>`
+export default {
+  async fetch(request: Request) {
+    const handler = Handler.prepare(Page)
+      .setContext(SessionCtx, async () => {
+        const token = request.headers.get('authorization') ?? '';
+        return verifyToken(token);
+      })
+      .setContext(ProfileCtx, async function* () {
+        // Generator providers can consume other contexts
+        const session = yield* SessionCtx;
+        const profile = await fetchProfile(session.userId);
+        return profile;
+      });
+
+    return new Response(renderToStream(handler), {
+      headers: { 'Content-Type': 'text/html; charset=UTF-8' }
+    });
+  }
+}
+```
+
+Context providers can be:
+- A plain value: `.setContext(Ctx, value)`
+- An async function: `.setContext(Ctx, async () => value)`
+- A sync generator: `.setContext(Ctx, function* () { ... })`
+- An async generator: `.setContext(Ctx, async function* () { ... })`
+
+Generator providers can `yield*` other contexts — those transitive dependencies are automatically tracked in the Handler's required context set.
+
+---
+
+### Violations
+
+Violations let a context provider or the root generator signal that something went wrong (missing auth, invalid input, etc.) and short-circuit execution. Violation names are tracked as a union type so the handler at the call site is exhaustive.
+
+```ts
+import { createContext, Handler, html, renderToStream, Violation } from 'raval';
+
+const AuthCtx = createContext<{ userId: string }>();
+
+function* Page() {
+  const auth = yield* AuthCtx;
+  yield* html`<p>Hello user ${auth.userId}</p>`;
+}
+
+export default {
+  fetch(request: Request) {
+    const handler = Handler.prepare(Page)
+      .setContext(AuthCtx, async function* () {
+        const token = request.headers.get('authorization');
+        if (!token) {
+          yield* new Violation('unauthorized');
+          return { userId: '' }; // unreachable
+        }
+        return verifyToken(token);
+      });
+
+    // violation handler is required because AuthCtx provider can yield 'unauthorized'
+    return new Response(
+      renderToStream(handler, (v) => {
+        if (v.name === 'unauthorized') {
+          return `<meta http-equiv="refresh" content="0;url=/login">`;
+        }
+      }),
+      { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+    );
+  }
+}
+```
+
+---
+
+### Actions (`run`)
+
+Use `run` for non-rendering handlers — form submissions, API routes, etc. It resolves all contexts, ignores HTML yields, and returns the generator's final value.
+
+```ts
+import { createContext, Handler, run, Violation } from 'raval';
+
+const RequestCtx = createContext<Request>();
+
+const submitHandler = Handler.prepare(function* () {
+  const request = yield* RequestCtx;
+  const form = yield* (async () => request.formData());
+  await saveData(Object.fromEntries(form));
+  return Response.redirect('/success');
+});
+
+export default {
+  fetch(request: Request) {
+    const handler = submitHandler.setContext(RequestCtx, request);
+    return run(handler);
+  }
+}
+```
+
+---
+
+### Just-in-time CSS injection
+
+Yield a `Css` instance to inject a `<style>` block. Identical instances are deduplicated — shared styles are emitted only once per stream.
+
+```ts
+import { css, html, Handler, renderToStream } from 'raval';
+
+const cardCss = css`
+  .card { border: 1px solid #ccc; padding: 1rem; }
+`;
+
+function* Card(title: string) {
+  yield cardCss;
+  yield* html`<div class="card">${title}</div>`;
+}
+
+function* Page() {
+  yield* Card("First");
+  yield* Card("Second"); // cardCss is not emitted again
 }
 ```
 
 ```html
-<!-- Generated html -->
-<ul>
-  <!-- Styles are inlined just before they are used -->
-  <style>
-    .ListItem {
-      margin: 4px;
-      color: blue;
-    }
-  </style>
-  <li class="ListItem">Item 1</li>
-  
-  <!-- Styles are deduped so they are only included once in the document, even if the component is rendered multiple times -->
-  <li class="ListItem">Item 2</li>
-  <li class="ListItem">Item 3</li>
-</ul>
+<!-- Generated HTML -->
+<style>.card { border: 1px solid #ccc; padding: 1rem; }</style>
+<div class="card">First</div>
+<div class="card">Second</div>
 ```
