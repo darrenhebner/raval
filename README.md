@@ -168,21 +168,26 @@ export default {
 
 Use `run` for non-rendering handlers — form submissions, API routes, etc. It resolves all contexts, ignores HTML yields, and returns the generator's final value.
 
-```ts
-import { createContext, Handler, run, Violation } from 'raval';
+The root generator is synchronous, so async work belongs in context providers.
 
-const RequestCtx = createContext<Request>();
+```ts
+import { createContext, Handler, run } from 'raval';
+
+interface FormFields { email: string; }
+
+const FormCtx = createContext<FormFields>();
 
 const submitHandler = Handler.prepare(function* () {
-  const request = yield* RequestCtx;
-  const form = yield* (async () => request.formData());
-  await saveData(Object.fromEntries(form));
-  return Response.redirect('/success');
+  const { email } = yield* FormCtx;
+  return Response.redirect(`/welcome?email=${encodeURIComponent(email)}`);
 });
 
 export default {
   fetch(request: Request) {
-    const handler = submitHandler.setContext(RequestCtx, request);
+    const handler = submitHandler.setContext(FormCtx, async () => {
+      const form = await request.formData();
+      return { email: String(form.get('email')) };
+    });
     return run(handler);
   }
 }
