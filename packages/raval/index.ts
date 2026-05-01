@@ -104,16 +104,21 @@ export function* html(
   }
 }
 
-export class Handler<Required extends Context<unknown> = never> {
-  readonly #fn: () => Generator<unknown, void, unknown>;
+export class Handler<Required extends Context<unknown> = never, Result = void> {
+  readonly #fn: () => Generator<unknown, Result, unknown>;
   readonly #contextMap: Map<unknown, unknown>;
 
-  static prepare<Yields>(fn: () => Generator<Yields, void, unknown>) {
-    return new Handler<Extract<Yields, Context<unknown>>>(fn, new Map());
+  static prepare<Yields, Result = void>(
+    fn: () => Generator<Yields, Result, unknown>
+  ) {
+    return new Handler<Extract<Yields, Context<unknown>>, Result>(
+      fn,
+      new Map()
+    );
   }
 
   private constructor(
-    fn: () => Generator<unknown, void, unknown>,
+    fn: () => Generator<unknown, Result, unknown>,
     contextMap: Map<unknown, unknown>
   ) {
     this.#fn = fn;
@@ -123,21 +128,25 @@ export class Handler<Required extends Context<unknown> = never> {
   setContext<C extends Required>(
     context: C,
     value: C extends Context<infer V> ? V | (() => Promise<V>) : never
-  ): Handler<Exclude<Required, C>>;
+  ): Handler<Exclude<Required, C>, Result>;
   setContext<C extends Required & Context<V>, V, NewYields>(
     context: C,
     provider:
       | (() => Generator<NewYields, V, unknown>)
       | (() => AsyncGenerator<NewYields, V, unknown>)
-  ): Handler<Exclude<Required, C> | Extract<NewYields, Context<unknown>>>;
+  ): Handler<
+    Exclude<Required, C> | Extract<NewYields, Context<unknown>>,
+    Result
+  >;
   setContext(
     context: Context<unknown>,
     value: unknown
-  ): Handler<Context<unknown>> {
+  ): Handler<Context<unknown>, Result> {
     const newMap = new Map(this.#contextMap);
     newMap.set(context, value);
     return new Handler(this.#fn, newMap) as unknown as Handler<
-      Context<unknown>
+      Context<unknown>,
+      Result
     >;
   }
 
@@ -200,34 +209,23 @@ function resolveContext(
   return resolveProvided(provided, contextMap);
 }
 
-async function processGenerator(
-  gen: Generator<unknown, void, unknown>,
+async function walkGenerator<Result>(
+  gen: Generator<unknown, Result, unknown>,
   contextMap: Map<unknown, unknown>,
-  styles: Set<Css>,
-  controller: ReadableStreamDefaultController,
-  encoder: TextEncoder
-): Promise<void> {
+  onYield: (value: unknown) => void
+): Promise<Result> {
   let next = gen.next();
-
   while (!next.done) {
     const value = next.value;
-
     if (value instanceof Context) {
       const resolved = await resolveContext(value, contextMap);
       next = gen.next(resolved);
-    } else if (value instanceof Css) {
-      if (!styles.has(value)) {
-        styles.add(value);
-        controller.enqueue(encoder.encode(`<style>${value.content}</style>`));
-      }
-      next = gen.next();
-    } else if (typeof value === "string") {
-      controller.enqueue(encoder.encode(value));
-      next = gen.next();
     } else {
+      onYield(value);
       next = gen.next();
     }
   }
+  return next.value;
 }
 
 export function renderToStream(handler: Handler<never>): ReadableStream {
@@ -237,17 +235,28 @@ export function renderToStream(handler: Handler<never>): ReadableStream {
   return new ReadableStream({
     async start(controller) {
       try {
-        await processGenerator(
-          handler.fn(),
-          handler.contextMap,
-          styles,
-          controller,
-          encoder
-        );
+        await walkGenerator(handler.fn(), handler.contextMap, (value) => {
+          if (value instanceof Css) {
+            if (!styles.has(value)) {
+              styles.add(value);
+              controller.enqueue(
+                encoder.encode(`<style>${value.content}</style>`)
+              );
+            }
+          } else if (typeof value === "string") {
+            controller.enqueue(encoder.encode(value));
+          }
+        });
         controller.close();
       } catch (e) {
         controller.error(e);
       }
     },
+  });
+}
+
+export function run<Result>(handler: Handler<never, Result>): Promise<Result> {
+  return walkGenerator(handler.fn(), handler.contextMap, () => {
+    // no-op — run ignores all rendered output
   });
 }
