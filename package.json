@@ -8,12 +8,15 @@
     "test": "pnpm -r --parallel test",
     "check": "ultracite check",
     "fix": "ultracite fix",
-    "prepare": "husky"
+    "prepare": "husky",
+    "sandcastle": "pnpm tsx .sandcastle/main.mts"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.5.7",
     "@biomejs/biome": "2.3.13",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "tsx": "^4.21.0",
     "typescript": "catalog:",
     "ultracite": "7.1.5"
   },
