@@ -41,25 +41,23 @@ function* Popovers() {
 
   yield* html`<div>
     <div id="PurchasePopover" class="Popover" popover="auto">
-      <ul>
-        ${purchaseLinks?.map(
-          (link) =>
-            html`<li>
-              <a href="${link.url?.resource}">${link.url?.resource}</a>
-            </li>`
-        )}
-      </ul>
+      <ul>`;
+  for (const link of purchaseLinks ?? []) {
+    yield* html`<li>
+          <a href="${link.url?.resource}">${link.url?.resource}</a>
+        </li>`;
+  }
+  yield* html`</ul>
     </div>
 
     <div id="StreamPopover" class="Popover" popover="auto">
-      <ul>
-        ${streamingLinks?.map(
-          (link) =>
-            html`<li>
-              <a href="${link.url?.resource}">${link.url?.resource}</a>
-            </li>`
-        )}
-      </ul>
+      <ul>`;
+  for (const link of streamingLinks ?? []) {
+    yield* html`<li>
+          <a href="${link.url?.resource}">${link.url?.resource}</a>
+        </li>`;
+  }
+  yield* html`</ul>
     </div>
   </div>`;
 }
@@ -67,9 +65,11 @@ function* Popovers() {
 function* Reviews() {
   const { reviews } = yield* ReviewsContext;
 
-  yield* html`<ol>
-    ${reviews.map((review) => html`<${ReviewItem} ...${review} />`)}
-  </ol>`;
+  yield* html`<ol>`;
+  for (const review of reviews) {
+    yield* ReviewItem(review);
+  }
+  yield* html`</ol>`;
 }
 
 const ReleaseCss = css`
@@ -147,35 +147,30 @@ export function* ReleaseContent() {
             Buy
           </button>
         </div>
-      </div>
-
-      ${
-        artworkUrl
-          ? html`<img
-            class="ReleaseHeaderArtwork"
-            src="/image-proxy?originalUrl=${artworkUrl}"
-            width="100"
-            height="100"
-          />`
-          : ""
-      }
-    </header>
-    <${Reviews} />
-    <${Popovers} />
-  </main>`;
+      </div>`;
+  if (artworkUrl) {
+    yield* html`<img
+        class="ReleaseHeaderArtwork"
+        src="/image-proxy?originalUrl=${artworkUrl}"
+        width="100"
+        height="100"
+      />`;
+  }
+  yield* html`</header>`;
+  yield* Reviews();
+  yield* Popovers();
+  yield* html`</main>`;
 }
 
 export function* Release() {
-  yield* html`
-    <html lang="en-US">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width" />
-        <title>Music Review Feed</title>
-      </head>
-      <body>
-        <${ReleaseContent} />
-      </body>
-    </html>
-  `;
+  yield* html`<html lang="en-US">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width" />
+      <title>Music Review Feed</title>
+    </head>
+    <body>`;
+  yield* ReleaseContent();
+  yield* html`</body>
+  </html>`;
 }

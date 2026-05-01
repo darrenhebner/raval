@@ -1,4 +1,3 @@
-import type { ComponentProps } from "raval";
 import { createContext, css, html } from "raval";
 import { formatRelativeTime } from "./date";
 import type { Review } from "./types";
@@ -45,12 +44,14 @@ const ReviewItemCss = css`
   }
 `;
 
-export function* ReviewItem({
-  publication,
-  snippet,
-  publishedAt,
-  children,
-}: ComponentProps<Review>) {
+export function* ReviewItem<ChildYields = never>(
+  {
+    publication,
+    snippet,
+    publishedAt,
+  }: Pick<Review, "publication" | "snippet" | "publishedAt">,
+  children?: () => Generator<ChildYields, void, unknown>
+) {
   yield ReviewItemCss;
 
   yield* html`<li class="ReviewItem">
@@ -65,14 +66,16 @@ export function* ReviewItem({
       <div class="ReviewItemHeading">
         <h4>${publication.name}</h4>
         <span class="ReviewItemMeta">${formatRelativeTime(publishedAt)}</span>
-      </div>
+      </div>`;
 
-      ${
-        snippet
-          ? html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`
-          : ""
-      }
-      ${children}
-    </div>
+  if (snippet) {
+    yield* html`<blockquote class="ReviewItemSnippet">${snippet}</blockquote>`;
+  }
+
+  if (children) {
+    yield* children();
+  }
+
+  yield* html`</div>
   </li>`;
 }

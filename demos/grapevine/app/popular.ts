@@ -28,20 +28,22 @@ export function* Popular() {
 
   const { releases } = yield* PopularReleasesContext;
 
-  yield* html`
-    <main class="PopularContainer">
-      <${Header} />
-      <ol class="PopularList">
-        ${releases.map(
-          (release) => html`
-            <li class="PopularListItem"><a href="${routes.release.href({ mbid: release.mbid })}"><${ReleaseItem} ...${release} /></a></li>
-          `
-        )}
-      </ol>
-    </main>
-  `;
+  yield* html`<main class="PopularContainer">`;
+  yield* Header();
+  yield* html`<ol class="PopularList">`;
+
+  for (const release of releases) {
+    yield* html`<li class="PopularListItem"><a href="${routes.release.href({ mbid: release.mbid })}">`;
+    yield* ReleaseItem(release);
+    yield* html`</a></li>`;
+  }
+
+  yield* html`</ol>
+  </main>`;
 }
 
 export function* PopularReleases() {
-  yield* html`<${Root} title="Popular releases (7-days)"><${Popular} /><//>`;
+  yield* Root("Popular releases (7-days)", function* () {
+    yield* Popular();
+  });
 }

@@ -34,17 +34,24 @@ export function* Feed() {
 
   const { reviews } = yield* FeedContext;
 
-  yield* html`<main class="FeedContainer">
-    <${Header} />
-    <ol class="Feed">
-      ${reviews.map(
-        (review) =>
-          html`<${ReviewItem} ...${review}><a href="${routes.release.href({ mbid: review.release.mbid })}" class="ReleaseLink"><${ReleaseItem} ...${review.release} /></a><//>`
-      )}
-    </ol>
+  yield* html`<main class="FeedContainer">`;
+  yield* Header();
+  yield* html`<ol class="Feed">`;
+
+  for (const review of reviews) {
+    yield* ReviewItem(review, function* () {
+      yield* html`<a href="${routes.release.href({ mbid: review.release.mbid })}" class="ReleaseLink">`;
+      yield* ReleaseItem(review.release);
+      yield* html`</a>`;
+    });
+  }
+
+  yield* html`</ol>
   </main>`;
 }
 
 export function* Home() {
-  yield* html`<${Root} title="Grapevine"><${Feed} /><//>`;
+  yield* Root("Grapevine", function* () {
+    yield* Feed();
+  });
 }

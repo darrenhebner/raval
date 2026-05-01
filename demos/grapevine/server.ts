@@ -1,6 +1,6 @@
 import { createRouter } from "@remix-run/fetch-router";
 import { MusicBrainzApi } from "musicbrainz-api";
-import { View, Violation } from "raval";
+import { Handler, renderToStream, Violation } from "raval";
 import { Home } from "./app/home";
 import { PopularReleases } from "./app/popular";
 import { Release } from "./app/release";
@@ -38,29 +38,33 @@ export default {
 
     router.map(routes, {
       home() {
-        const view = View.prepare(Home)
+        const handler = Handler.prepare(Home)
           .setContext(FeedContext, FeedHandler)
           .setContext(EnvContext, env);
 
-        return new Response(view.renderToStream(), {
+        return new Response(renderToStream(handler), {
           headers: {
             "Content-Type": "text/html; charset=UTF-8",
           },
         });
       },
       popular() {
-        const view = View.prepare(PopularReleases)
+        const handler = Handler.prepare(PopularReleases)
           .setContext(PopularReleasesContext, PopularReleasesHandler)
           .setContext(EnvContext, env);
 
-        return new Response(view.renderToStream(), {
+        return new Response(renderToStream(handler), {
           headers: {
             "Content-Type": "text/html; charset=UTF-8",
           },
         });
       },
       release({ params }) {
-        const view = View.prepare(Release)
+        const handler = Handler.prepare(Release)
+          .setContext(ReviewsContext, function* () {
+            const { reviews } = yield* ReleaseContext;
+            return { reviews };
+          })
           .setContext(ReleaseContext, async function* () {
             const { DB } = yield* EnvContext;
             const { results } = await DB.prepare(
@@ -129,10 +133,6 @@ export default {
 
             return release;
           })
-          .setContext(ReviewsContext, function* () {
-            const { reviews } = yield* ReleaseContext;
-            return { reviews };
-          })
           .setContext(MusicBrainzReleaseContext, async () => {
             const mbApi = new MusicBrainzApi({
               appName: "Grapevien",
@@ -147,8 +147,10 @@ export default {
 
             return result;
           })
-          .setContext(EnvContext, env)
-          .handleViolation((violation) => {
+          .setContext(EnvContext, env);
+
+        return new Response(
+          renderToStream(handler, (violation) => {
             switch (violation.name) {
               case "MissingRelease": {
                 return "</script><script>window.location = '/';</script></html>";
@@ -157,13 +159,13 @@ export default {
                 assertNever(violation.name);
               }
             }
-          });
-
-        return new Response(view.renderToStream(), {
-          headers: {
-            "Content-Type": "text/html; charset=UTF-8",
-          },
-        });
+          }),
+          {
+            headers: {
+              "Content-Type": "text/html; charset=UTF-8",
+            },
+          }
+        );
       },
       async imageProxy({ request }) {
         async function fetchWithRetry() {
